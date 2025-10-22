@@ -1,0 +1,9 @@
+name: clover-report
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - r-base 
+  - r-rmarkdown 
+  - r-knitr 
+  - r-essentials

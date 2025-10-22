@@ -1,0 +1,112 @@
+--- new_make_database.py	(original)
++++ new_make_database.py	(refactored)
+@@ -18,8 +18,8 @@
+ def get_location(program, allowfail = False):
+     progloc = find_executable(program)
+     if find_executable(program) is None and not allowfail:
+-        print >>sys.stderr, "Could not find "+program+" in path"
+-        print >>sys.stderr, "Aborting"
++        print("Could not find "+program+" in path", file=sys.stderr)
++        print("Aborting", file=sys.stderr)
+         sys.exit(1)
+     else:
+         return progloc
+@@ -111,13 +111,13 @@
+ def shellcall(shellcommand,failquit = False):
+     retcode = subprocess.call(shellcommand, shell=True)
+     if retcode > 0 and failquit:
+-        print >>sys.stderr, "Command failed:"
+-        print >>sys.stderr, shellcall
+-        print >>sys.stderr, "quiting program..."
++        print("Command failed:", file=sys.stderr)
++        print(shellcall, file=sys.stderr)
++        print("quiting program...", file=sys.stderr)
+         sys.exit(1)
+     elif retcode > 0:
+-        print >>sys.stderr, "Command failed:"
+-        print >>sys.stderr, shellcall
++        print("Command failed:", file=sys.stderr)
++        print(shellcall, file=sys.stderr)
+     return retcode
+         
+         
+@@ -130,7 +130,7 @@
+ addtrna = args.addtrnas
+ forcecca = args.forcecca
+ if namemapfile is None:
+-    print >>sys.stderr, "Name map file currently needed for tRNA database creation"
++    print("Name map file currently needed for tRNA database creation", file=sys.stderr)
+     sys.exit(1)
+ orgmode = args.orgmode
+ addseqs = args.addseqs
+@@ -198,13 +198,13 @@
+ transnums = gettrnanums(transalign, margin = 0, orgtype = orgmode, mode = "transcript")
+ alignnumfile = open(dbdirectory+dbname+"-alignnum.txt", "w")
+ for i, currbase in enumerate(transalign.consensus):
+-    print >>alignnumfile, "\t".join([str(i), transalign.consensus[i], transalign.currstruct[i], transnums[i]])
++    print("\t".join([str(i), transalign.consensus[i], transalign.currstruct[i], transnums[i]]), file=alignnumfile)
+ alignnumfile.close()
+ locialign = list(readrnastk(open(locusstk, "r")))[0]
+ locinums = gettrnanums(locialign, margin = 0, orgtype = orgmode, mode = "locus")
+ locinumfile = open(dbdirectory+dbname+"-locusnum.txt", "w")
+ for i, currbase in enumerate(locialign.consensus):
+-    print >>locinumfile, "\t".join([str(i), locialign.consensus[i], locialign.currstruct[i], locinums[i]])
++    print("\t".join([str(i), locialign.consensus[i], locialign.currstruct[i], locinums[i]]), file=locinumfile)
+ 
+ 
+ locinumfile.close()
+@@ -231,7 +231,7 @@
+             continue
+         seqsname = fields[0]   
+         seqsfile = fields[1]
+-        print >>otherseqs, seqsname + "\t"+dbname+"-"+seqsname+"_seq.fa"+"\t"+dbname+"-"+seqsname+"_seq.bed"
++        print(seqsname + "\t"+dbname+"-"+seqsname+"_seq.fa"+"\t"+dbname+"-"+seqsname+"_seq.bed", file=otherseqs)
+         seqfiles[fields[0]] = fields[1]
+ 
+         seqbed = open(dbdirectory+dbname+"-"+seqsname+"_seq.bed", "w")
+@@ -240,15 +240,15 @@
+             
+             if name not in seqcounts:
+                 
+-                print >>seqfasta, ">"+name
++                print(">"+name, file=seqfasta)
+                 seqcounts[name] += 1
+             else:
+                 
+-                print >>seqfasta, ">"+name +"."+str(seqcounts[name])
++                print(">"+name +"."+str(seqcounts[name]), file=seqfasta)
+                 seqcounts[name] += 1
+-            print >>seqfasta, (20 *"N")+seq.upper()+(20 *"N")
+-        
+-            print >>seqbed, "\t".join([name, str(20), str(len(seq) + 20), name,"1000", "+"])
++            print((20 *"N")+seq.upper()+(20 *"N"), file=seqfasta)
++        
++            print("\t".join([name, str(20), str(len(seq) + 20), name,"1000", "+"]), file=seqbed)
+         
+         seqbed.close()
+     otherseqs.close() 
+@@ -266,16 +266,16 @@
+     
+     
+ dbinfo = open(dbdirectory+dbname+ "-dbinfo.txt","w")
+-print >>dbinfo, "time\t"+str(runtime)+"("+str(loctime[1])+"/"+str(loctime[2])+"/"+str(loctime[0])+")"
+-print >>dbinfo, "creation\t"+" ".join(sys.argv)
+-print >>dbinfo, "genomefile\t"+str(genomefile)
+-print >>dbinfo, "trnascanfile\t"+str(scanfile)
+-print >>dbinfo, "orgmode\t"+str(orgmode)
+-print >>dbinfo, "forcecca\t"+str(forcecca)
+-print >>dbinfo, "git version\t"+str(gitversion)
++print("time\t"+str(runtime)+"("+str(loctime[1])+"/"+str(loctime[2])+"/"+str(loctime[0])+")", file=dbinfo)
++print("creation\t"+" ".join(sys.argv), file=dbinfo)
++print("genomefile\t"+str(genomefile), file=dbinfo)
++print("trnascanfile\t"+str(scanfile), file=dbinfo)
++print("orgmode\t"+str(orgmode), file=dbinfo)
++print("forcecca\t"+str(forcecca), file=dbinfo)
++print("git version\t"+str(gitversion), file=dbinfo)
+ 
+ if addseqs:
+-    print >>dbinfo, "additional transcripts\t"+" ".join(name+":"+source for name, source in seqfiles.iteritems())
++    print("additional transcripts\t"+" ".join(name+":"+source for name, source in seqfiles.items()), file=dbinfo)
+ 
+ dbinfo.close()
+ #cores = None

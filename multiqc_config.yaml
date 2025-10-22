@@ -1,0 +1,29 @@
+report_header_info:
+  - Contact E-mail:  DataAnalyticsCore@groups.dartmouth.edu
+  - Application Type: "clover-seq"
+
+extra_fn_clean_exts:
+  - ".srt"
+  - ".combined"
+  - ".aln.err"
+  - ".1M"
+  - ".mkdup"
+  - ".hisat"
+  - ".5k"
+
+module_order:
+  - "cutadapt"
+  - "bowtie2"
+  - "samtools"
+  - "picard"
+  - "featurecounts"
+
+
+        
+table_columns_visible:
+  featureCounts: False  
+  Samtools: False
+
+fn_ignore_files:
+  - "*.flagstat"
+  - "*.idxstats"

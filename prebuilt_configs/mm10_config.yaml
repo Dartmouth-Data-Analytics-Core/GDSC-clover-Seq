@@ -1,0 +1,58 @@
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#                 MM10 PREPROCESSING CONFIGURATION FILE                        #
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# Workflow Name:   GDSC-Clover-Seq (tRNA-sequencing)
+# Description:     Configuration settings for clover-seq preprocessing
+# Author:          Mike Martinez (Genomic Data Science Core - Dartmouth)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# Instructions:
+# - Fill in each parameter as needed.
+# - Maintain consistent formatting (YAML is space and case-sensitive).
+# - Indent with spaces, not tabs.
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# GENERAL SETTINGS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+sample_txt: "Sample_list_SE.txt"
+runFile: "runfile.txt"
+layout: "single"
+genome: "mm10"
+refLevel: "WT"
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# MM10 tRNA DATABASE DOWNLOAD SETTINGS (NEED GENOME SPECIFIC CONFIGS)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+GTF_URL: "ftp://ftp.ensembl.org/pub/release-102/gtf/mus_musculus/Mus_musculus.GRCm38.102.gtf.gz"
+gtRNAdb_URL: "https://gtrnadb.ucsc.edu/genomes/eukaryota/Mmusc10/mm10-tRNAs.tar.gz"
+gtRNAdb_OUT: "mm10-tRNAs-confidence-set.out"
+gtRNAdb_NAME: "mm10-tRNAs_name_map.txt"
+GENOME_URL: "https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.2bit"
+FASTA: "false"
+makeDB: "code/new_make_database.py"
+bt2_index: "tRNAgenome"
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# tRNA DATABASE TAR ARCHIVE PATH
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+trna_db: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db"
+bt2_index: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db/bt2_index/db-tRNAgenome"
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# TRIMMING PARAMETERS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+adapter_1: "AGATCGGAAGAGCACACGTC"
+adapter_2: "GATCGTCGGACTGTAGAACTC"
+minlength: "15"
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# tRNA ALIGNMENT PARAMETERS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+maxMaps: "100"
+nPenalty: "5"
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# DIFFERENTIAL EXPRESSION PARAMETERS
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+log2FC_magnitude_threshold: 1
+padj_threshold: 0.05

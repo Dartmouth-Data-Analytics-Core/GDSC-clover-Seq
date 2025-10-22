@@ -1,0 +1,69 @@
+---
+title: "Clover-Seq Analysis Report"
+author: "Generated via Snakemake "
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+
+# Principal Component Analysis
+```{r, echo=FALSE, fig.show='hold', out.width='33%'}
+knitr::include_graphics("../06_PCA/gene_level_PCA.png")
+knitr::include_graphics("../06_PCA/tRNA_isotype_PCA.png")
+knitr::include_graphics("../06_PCA/PCA_Direct_Comparison.png")
+```
+<br><br>
+
+# Normalized tRNA Counts
+```{r, echo=FALSE, fig.show='hold', out.width='50%'}
+knitr::include_graphics("../08_plots/Isoacceptor_counts_by_sample_normalized.png")
+knitr::include_graphics("../08_plots/Isoacceptor_counts_normalized.png")
+```
+<br><br>
+
+# Summed-Normalized mismatch counts relative to reference level
+```{r, echo=FALSE, fig.show='hold', out.width='100%'}
+knitr::include_graphics("../03_tRNA_counts/Z_scored_summed_mismatches_relative_to_reference.png")
+```
+
+# Normalized smRNA Counts
+```{r, echo=FALSE, fig.show='hold', out.width='100%'}
+knitr::include_graphics("../08_plots/smRNA_Relative_Abundances.png")
+```
+<br><br>
+
+# Normalized CCA Tails
+```{r, echo=FALSE, fig.show='hold', out.width='50%'}
+knitr::include_graphics("../08_plots/CCA_ends_normalized_absolute_abundances.png")
+knitr::include_graphics("../08_plots/CCA_ends_Relative_Abundances.png")
+```
+<br><br>
+
+# tRNA-level Differential Expression
+```{r, echo=FALSE, fig.show='hold', out.width='50%'}
+knitr::include_graphics("../10_differential_expression/Figures/tRNA_isotype_MA_plot.png")
+knitr::include_graphics("../10_differential_expression/Figures/tRNA_isotype_volcano_plot.png")
+```
+<br><br>
+
+# Gene-level Differential Expression
+```{r, echo=FALSE, fig.show='hold', out.width='50%'}
+knitr::include_graphics("../10_differential_expression/Figures/gene_level_MA_plot.png")
+knitr::include_graphics("../10_differential_expression/Figures/gene_level_volcano_plot.png")
+```
+<br><br>
+
+# Coverages
+```{r, echo=FALSE, fig.show='hold', out.width='50%'}
+cov_plots <- list.files("../08_plots/mature_tRNA_coverages", pattern = "\\.png$", full.names = TRUE)
+knitr::include_graphics(cov_plots)
+```

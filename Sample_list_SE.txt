@@ -1,0 +1,5 @@
+Sample_ID,fastq_1,Group
+IB1,data/IB_1_S1_R1_001.fastq.gz,WT
+IB2,data/IB_2_S2_R1_001.fastq.gz,WT
+IB3,data/IB_3_S3_R1_001.fastq.gz,KO
+IB4,data/IB_4_S4_R1_001.fastq.gz,KO
