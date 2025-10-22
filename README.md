@@ -326,45 +326,6 @@ Upon completion of the differential expression module, a pdf report `clover-seq-
 
 <img src="img/report_example.png" alt="Description" width="400" height="400"/>
 
-## Development Notes:
-
-To run custom_mismatches.py (works on a single bam file at a time) and requires the mature tRNA fasta, bed, and stk alignment
-Originally, the code that calculates the mismatches happens in `processsamples.py` (original tRAX) which calls `getcoverage.testmain` to calculate mismathces. When I try to just run `getcoverage.testmain` this does not work. `getcoverage.main` DOES work, but the file it outputs is slightly different (just has coverage information and not mismatch information). This is useful to make the coverage plots, but we don't have any mismatch information.
-```shell
- python code/mismatches.py \
-    --bam 02_tRNA_alignment/IB1.mkdup.bam \
-    --fasta /dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-maturetRNAs.fa \
-    --bed /dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-maturetRNAs.bed \
-    --stk /dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-trnaalign.stk >TEST.out
-```
-
-The original `getgenomicmismatches.py` from tRAX github seems to work, but rather than tRNAs, it works on all other smRNAs.
-Not enitely sure how to hack it to work for tRNAs. See example file on desktop. This is more robust, but I have no idea what's going on....
-
-```shell
-python code/mismatches.py \
-    --samplefile=runfile.txt \
-    -genomefasta=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-maturetRNAs.fa \
-    --ensemblgtf=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/genes.gtf \
-    --covfile=TEST_coverages.txt \
-    --outbed=TEST_out.bed \
-    --cores=8 \
-    --sizefactors=05_normalized/gene_level_counts_size_factors.csv \
-    --bedfile=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-maturetRNAs.bed \
-    --stk=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/hg38_db/db-trnaalign.stk 
-
-
-```
-
-```
-
-To make all feature bed file (not sure if this is super relevant...)
-```shell
-python make_all_feature_bed.py \
-    db-maturetRNAs.bed \
-    db-trnaloci.bed \
-    genes.gtf
-```
 
 ## Contact
 Please address questions to **DataAnalyticsCore@groups.dartmouth.edu** or submit an issue in the GitHub repository.
