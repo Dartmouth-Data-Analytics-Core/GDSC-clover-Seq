@@ -31,7 +31,6 @@ Modular Snakemake workflows for the comprehensive analyses of mature tRNAs and o
 - [Differential Expression Implementation](#differential-expression-implementation)
     - [10 Differential Expression Outputs](#10-differential-expression-outputs)
     - [11 Clover Seq Report](#11-clover-seq-report)
-- [Development Notes](#development-notes)
 - [Contact](#contact)
 - [Citation and Licensing](#citation-and-licensing)
 
