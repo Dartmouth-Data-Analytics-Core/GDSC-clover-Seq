@@ -337,6 +337,8 @@ Please address questions to **DataAnalyticsCore@groups.dartmouth.edu** or submit
 
 **This pipeline was created with funds from the COBRE grant 1P20GM130454. If you use the pipeline in your own work, please acknowledge the pipeline by citing the grant number in your manuscript.**
 
+**Protocols.io DOI:** dx.doi.org/10.17504/protocols.io.n2bvjewz5gk5/v1
+
 
 
 
