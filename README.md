@@ -50,7 +50,7 @@ To install this code, clone the github repository
 
 ```shell
 #----- Clone repository
-git clone https://github.com/mikemartinez99/clover-Seq
+git clone https://github.com/Dartmouth-Data-Analytics-Core/GDSC-clover-Seq/
 
 ```
 
