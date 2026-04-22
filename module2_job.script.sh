@@ -2,8 +2,7 @@
 
 #SBATCH --job-name=clvSeq_preproc
 #SBATCH --nodes=1
-#SBATCH --partition=preempt1
-#SBATCH --account=dac
+#SBATCH --partition=standard
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16  
 #SBATCH --time=60:00:00
