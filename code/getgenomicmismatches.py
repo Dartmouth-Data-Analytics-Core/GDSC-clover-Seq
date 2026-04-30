@@ -145,7 +145,7 @@ class readcoverage:
 
 def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,geneseqs,sizefactor, mincoverage, outbed = None, positionnums = None):
 
-    print("\t".join(["Feature","Sample","position","coverage","readstarts","readends","readstotal","expreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"]), file=mismatchreport)
+    print("\t".join(["Feature","Sample","position","coverage","readstarts","readends","tRNAreadstotal","expreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"]), file=mismatchreport)
     #print >>sys.stderr,mismatchreport
     #print >>sys.stderr,"||***"
     samples = sampledata.getsamples()

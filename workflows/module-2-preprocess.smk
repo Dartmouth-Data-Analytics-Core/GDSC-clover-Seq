@@ -73,6 +73,7 @@ rule all:
             "mature_tRNA_coverages.txt",
             "mature_tRNA_mismatches.txt",
             "mature_tRNA_mismatches.bed"]),
+        directory("03_tRNA_counts/mismatch_heatmaps"),
 
         #----- Rule read_length_distribution outputs
         "02_tRNA_alignment/full_alignment_read_length_distribution.txt",
@@ -473,13 +474,15 @@ rule get_mismatches:
         sizeFactors = "05_normalized/gene_level_counts_size_factors.csv"
     output:
         mismatches = "03_tRNA_counts/mature_tRNA_mismatches.txt",
-        outBed = "03_tRNA_counts/mature_tRNA_mismatches.bed"
+        outBed = "03_tRNA_counts/mature_tRNA_mismatches.bed",
+        heatmapDir = directory("03_tRNA_counts/mismatch_heatmaps")
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
     benchmark: "benchmarks/rule_get_mismatches/get_mismatches_bm.tsv"
     params:
         mismatchCode = "code/getgenomicmismatches.py",
-        heatmapCode = "code/visualizations/clover-seq-mismatches.R",
+        #heatmapCode = "code/visualizations/clover-seq-mismatches.R",
+        heatmapCode = "code/visualizations/clover-seq-heatmaps.R",
         runFile = config["runFile"],
         metadata = config["sample_txt"],
         trna_db = config["trna_db"],
@@ -498,10 +501,18 @@ rule get_mismatches:
             --stkfile={params.trna_db}/db-trnaalign.stk
 
         #----- Run plotting code
+        #Rscript {params.heatmapCode} \
+        #    {output.mismatches} \
+        #    {params.metadata} \
+        #   {params.refLevel}
+
+        #----- Run plotting script
         Rscript {params.heatmapCode} \
-            {output.mismatches} \
-            {params.metadata} \
-            {params.refLevel}
+            --mismatch={output.mismatches} \
+            --trna={params.trna_db}/db-trnatable.txt \
+            --samples={params.metadata} \
+            --directory={output.heatmapDir}
+
 
     """
 

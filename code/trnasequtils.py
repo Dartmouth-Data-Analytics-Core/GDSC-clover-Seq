@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 import pysam
 import sys
 import tempfile
@@ -12,6 +13,11 @@ from distutils.spawn import find_executable
 from collections import defaultdict
 
 allaminos = ('Ala','Arg','Asn','Asp','Cys','Gln','Glu','Gly','His','Ile','Ile2','Leu','Lys','Met','iMet','fMet','Phe','Pro','Ser','Thr','Trp','Tyr','Val','SeC','Sup','Undet')
+
+if sys.version_info[0] < 3:
+    print("tRAX now requires python3, version " +str(sys.version_info[0]) +" too low",file=sys.stderr)
+    sys.exit(1)
+
 
 def readmultifasta(fafile):
     #print chrom+":"+ chromstart+"-"+ chromendre
@@ -85,13 +91,13 @@ def fastadict(fafile):
     return seqdict
         
 def tempmultifasta(allseqs):
-    fafile = tempfile.NamedTemporaryFile(suffix=".fa", mode="w+")
+    fafile = tempfile.NamedTemporaryFile(suffix=".fa",mode="w+")
 
 
     for seqname, seq in allseqs:
         print(">"+seqname+"\n", file=fafile)
         print(seq+"\n", file=fafile)
-        
+
     fafile.flush()
     return fafile
 def invertstrand(strand):
@@ -484,9 +490,9 @@ class samplefile:
     def getsamples(self):
         return self.samplelist
     def getbamlist(self):
-        return list(curr+ ".mkdup.bam" for curr in self.samplelist)
+        return list(curr+ ".bam" for curr in self.samplelist)
     def getbam(self, sample):
-        return "02_tRNA_alignment/" + sample + ".mkdup.bam" 
+        return self.samplefiles[sample] + "/" + sample + ".srt.bam"
     def getmergebam(self, sample):
         return self.bamdir + "/" + sample + "-merge.bam" 
     def getfastq(self, sample):
@@ -1316,11 +1322,11 @@ def getgithash(scriptdir):
     if gitloc is None:
         print("Cannot find git in path", file=sys.stderr)
         print("Recording of versioning not possible", file=sys.stderr)
-    gitjob = subprocess.Popen([gitloc,"--git-dir="+scriptdir+"/.git","rev-parse","HEAD"],stdout = subprocess.PIPE,stderr = subprocess.STDOUT, universal_newlines=True )
+    gitjob = subprocess.Popen([gitloc,"--git-dir="+scriptdir+"/.git","rev-parse","HEAD"],stdout = subprocess.PIPE,stderr = subprocess.STDOUT,universal_newlines=True  )
     githash = gitjob.communicate()[0].rstrip()
     if gitjob.returncode != 0:
         githash = "Cannot find git hash"
-    gitjob = subprocess.Popen([gitloc,"--git-dir="+scriptdir+"/.git","describe"],stdout = subprocess.PIPE,stderr = subprocess.STDOUT, universal_newlines=True )
+    gitjob = subprocess.Popen([gitloc,"--git-dir="+scriptdir+"/.git","describe"],stdout = subprocess.PIPE,stderr = subprocess.STDOUT,universal_newlines=True  )
     gitversion = gitjob.communicate()[0].rstrip()
     if gitjob.returncode != 0:
         gitversion = "Cannot find git version"
