@@ -8,6 +8,7 @@ import itertools
 from collections import defaultdict
 import os.path
 from trnasequtils import *
+from getcoverage import gettnanums, readtrnanums
 import time
 from multiprocessing import Process, Queue, Pool
 
@@ -142,21 +143,29 @@ class readcoverage:
             pass
         
 
-def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,geneseqs,sizefactor, mincoverage, outbed = None):
+def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,geneseqs,sizefactor, mincoverage, outbed = None, positionnums = None):
 
     print("\t".join(["Feature","Sample","position","coverage","readstarts","readends","readstotal","expreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"]), file=mismatchreport)
+    #print >>sys.stderr,mismatchreport
+    #print >>sys.stderr,"||***"
     samples = sampledata.getsamples()
     mismatchthreshold = .05
     for currfeat in genelist:
+        #print >>sys.stderr, totalreads
+        #print >>sys.stderr, samplecoverages[list(samples)[0]].allcoverages.keys()
         totalreads = sum(samplecoverages[currsample].allcoverages[currfeat.name].totalreads for currsample in samples)
+        #print >>sys.stderr, totalreads
         if totalreads < mincoverage:
             continue
         reportpositions = set()  
+        #print >>sys.st
         mismatchpos = dict()
         coveragepos = dict()
         trnalen = None
         
         for currsample in samples:
+            
+            
             covcounts =  list(curr if curr is not None else 0 for curr in samplecoverages[currsample].allcoverages[currfeat.name].coveragelist())
             mismatches =  list(curr if curr is not None else 0 for curr in samplecoverages[currsample].readmismatches[currfeat.name].coveragelist())
             trnalen = len(mismatches)
@@ -170,12 +179,28 @@ def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,gene
             maxmismatch[currpos] = max(mismatchpos[currsample][currpos] for currsample in samples)
             maxcov[currpos] = max(coveragepos[currsample][currpos] for currsample in samples)
             maxpercent[currpos] = max((0+1.*mismatchpos[currsample][currpos])/(10+coveragepos[currsample][currpos]) for currsample in samples)
+            #print >>sys.stderr, currfeat.name+":"+str(currpos)+":"+str(maxmismatch[currpos])+"/"+str(maxcov[currpos])+":"+str(maxpercent[currpos])
             if maxpercent[currpos] > mismatchthreshold:
                 print(currfeat.getbase(currpos).bedstring(name = currfeat.name+"_"+str(currpos)+"pos", score = int(maxpercent[currpos] * 1000)), file=outbed)
         for currsample in samples:
+            #readcounts = samplecoverages[currsample].readcounts
+            
+            #print >>sys.stderr, ",".join(list(str(curr) if curr is not None else 0 for curr in samplecoverages[currsample].readmismatches[currfeat.name].coveragealign(trnastk.aligns[currfeat.name])))
+            #covcounts = list(curr/(1.*samplecoverages[currsample].readcounts[currfeat.name]) if curr is not None else 0 for curr in samplecoverages[currsample].readmismatches[currfeat.name].coveragealign(trnastk.aligns[currfeat.name]))
+            
             covcounts =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].allcoverages[currfeat.name].coveragelist())
+
             mismatches =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].readmismatches[currfeat.name].coveragelist())
             deletions =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].readskips[currfeat.name].coveragelist())
+
+
+            #uniquecounts =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].uniquecoverages[currfeat.name].coveragelist())
+            #multitrna =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].multtrnacoverages[currfeat.name].coveragelist())
+            #multaccounts =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].multaccoverages[currfeat.name].coveragelist())
+            #multaminocounts =  list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].multaminocoverages[currfeat.name].coveragelist())
+
+
+
             allstarts  = list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].readstarts[currfeat.name].coveragelist())
             allends = list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].readends[currfeat.name].coveragelist())
             allcovcount  = list(curr/sizefactor[currsample] if curr is not None else 0 for curr in samplecoverages[currsample].allcoverages[currfeat.name].coveragelist())
@@ -185,13 +210,25 @@ def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,gene
             guanosinecount  = list(curr if curr is not None else 0 for curr in samplecoverages[currsample].guanosinemismatches[currfeat.name].coveragelist())
             readskipcount  = list(curr if curr is not None else 0 for curr in samplecoverages[currsample].readskips[currfeat.name].coveragelist())
 
+            featpos = positionnums.get(currfeat.name) if positionnums is not None else None
             for i, currcount in enumerate(allcovcount):
+
                 realbase = geneseqs[currfeat.name][i]
+                lastbase = max([i - 1, 0])
+                nextbase = min([i + 1, len(maxpercent) - 1])
+                if maxpercent[i] < mismatchthreshold and maxpercent[lastbase] < mismatchthreshold and maxpercent[nextbase] < mismatchthreshold:
+                    continue
+                if outbed is not None and not maxpercent[i] < mismatchthreshold:
+                    pass
                 if realbase in gapchars:
                     realbase = "-"
                 if realbase == "U":
                     realbase = "T"
-                print("\t".join([currfeat.name,currsample,str(i),str(covcounts[i]),str(allstarts[i]),str(allends[i]),str(1.*samplecoverages[currsample].readcounts[currfeat.name]/sizefactor[currsample]),str(totalreads),realbase,str(mismatches[i]),str(deletions[i]),str(adeninecount[i]),str(thyminecount[i]),str(cytosinecount[i]),str(guanosinecount[i]), str(readskipcount[i])]), file=mismatchreport)
+                if featpos is not None and i < len(featpos):
+                    posname = str(featpos[i])
+                else:
+                    posname = str(i)
+                print("\t".join([currfeat.name,currsample,posname,str(covcounts[i]),str(allstarts[i]),str(allends[i]),str(1.*samplecoverages[currsample].readcounts[currfeat.name]/sizefactor[currsample]),str(totalreads),realbase,str(mismatches[i]),str(deletions[i]),str(adeninecount[i]),str(thyminecount[i]),str(cytosinecount[i]),str(guanosinecount[i]), str(readskipcount[i])]), file=mismatchreport)
     #sys.exit(1)  
     
 def getsamplecoverage(currsample, sampledata, genelist,geneseqs,maxmismatches = None, minextend = None): 
@@ -512,12 +549,20 @@ def main(**argdict):
                 sys.exit(1)
     combinereps = True
 
-
-    #gettnanums
-
-    #print(orgtype)
-    #print(positionnums)
-    #print(trnastk.aligns["tRNA-Arg-TCG-1"])
+    positionnums = None
+    if argdict.get("stkfile"):
+        trnastk = list(readrnastk(open(argdict["stkfile"], "r")))[0]
+        posnumlist = gettnanums(trnastk)
+        positionnums = {}
+        for feat in genelist:
+            if feat.name in trnastk.aligns:
+                alignseq = trnastk.aligns[feat.name]
+                # map each ungapped sequence position to its Sprinzl name
+                positionnums[feat.name] = [
+                    posnumlist[col]
+                    for col, base in enumerate(alignseq)
+                    if base not in set(".-")
+                ]
 
     featcount = defaultdict(int)
 
@@ -567,12 +612,13 @@ if __name__ == "__main__":
                        help='Optional file including size factors that will be used for normalization')
     parser.add_argument('--bedfile',  nargs='*',
                    help='Additional bed files for feature list')
+    parser.add_argument('--stkfile',
+                       help='Stockholm alignment file for Sprinzl position numbering')
 
     parser.add_argument('--mincoverage', type=int, default=10,
                        help='Reads with less then this are filtered out (default 10)')
     parser.add_argument('--maxmismatches', default=None,
                        help='Set maximum number of allowable mismatches')
-    parser.add_argument('--stkfile')
     '''
     parser.add_argument('--trnapositions', action="store_true", default=False,
                        help='Use tRNA positions')
@@ -585,7 +631,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     argdict = vars(args)
     main(**argdict)
-    
-    
-# To run:
-#python code/getgenomicmismatches.py --samplefile=runfile.txt --genomefasta=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/dm6_db/db-maturetRNAs.fa --ensemblgtf=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/dm6_db/genes.gtf --covfile=TEST_coverages.txt --outbed=TEST_out.bed --cores=8 --sizefactors=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/Labs/orellana/250521_fly_data/clover-Seq/250521_Fly_CloverSeq/05_normalized/gene_level_counts_size_factors.csv --bedfile=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/dm6_db/db-maturetRNAs.bed --stkfile=/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/dm6_db/db-trnaalign.stk 
