@@ -490,7 +490,6 @@ rule get_mismatches:
         python {params.mismatchCode} \
             --samplefile={params.runFile} \
             --genomefasta={params.trna_db}/db-maturetRNAs.fa \
-            --ensemblgtf={params.trna_db}/genes.gtf \
             --covfile={output.mismatches} \
             --outbed={output.outBed} \
             --cores={resources.cpus} \
