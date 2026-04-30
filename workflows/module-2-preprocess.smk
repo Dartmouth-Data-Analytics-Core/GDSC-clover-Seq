@@ -496,7 +496,7 @@ rule get_mismatches:
             --cores={resources.cpus} \
             --sizefactors={input.sizeFactors} \
             --bedfile={params.trna_db}/db-maturetRNAs.bed \
-            --stkfile={params.trna_db}/trnaalign.stk
+            --stkfile={params.trna_db}/db-trnaalign.stk
 
         #----- Run plotting code
         Rscript {params.heatmapCode} \
