@@ -36,12 +36,12 @@ if (!file.exists(metadata)) {
 }
 
 #----- Set input directories
-trnaDir <- "03_tRNA_counts/"
-smrnaDir <- "04_smRNA_counts/"
-normalizeDir <- "05_normalized/"
+trnaDir <- "03_Raw_Quant/tRNA_counts/"
+smrnaDir <- "03_Raw_Quant/other_smRNAs/"
+normalizeDir <- "04_Expression/"
 
 #----- Set output directory and create
-opDir <- "08_plots/"
+opDir <- "07_Plots/"
 if (!dir.exists(opDir)) {
   dir.create(opDir)
 }
@@ -266,22 +266,16 @@ message("\tPlotted CCA_ends_Relative_Abundances.png\n")
 message("--------------------------------------------------")
 
 #----- Read in size factors
-message("Calculating normalization using 03_tRNA_counts/tRNA_isotype_counts_size_factors.csv\n")
-trna_sf <- read.table(paste0(normalizeDir, "tRNA_isotype_counts_size_factors.csv"), 
-                      sep = ",", 
-                      header = TRUE, 
-                      check.names = FALSE, 
+message("Calculating normalization using 04_Expression/tRNA_isotype_counts_size_factors.csv\n")
+trna_sf <- read.table(paste0(normalizeDir, "tRNA_isotype_counts_size_factors.csv"),
+                      sep = "",
+                      header = TRUE,
+                      check.names = FALSE,
                       quote = "\"")
-
-#----- Remove the first column
-trna_sf[,1] <- NULL
 
 #----- Get size factors as a named vector
 sizeFactors <- as.numeric(unlist(trna_sf[1,]))
-
-#----- Remove the first element (X, which is just 1)
-#names(sizeFactors) <- colnames(trna_sf)
-names(sizeFactors) <- meta$Sample
+names(sizeFactors) <- colnames(trna_sf)
 message("Size Factors: ")
 print(sizeFactors)
 
@@ -298,7 +292,7 @@ ccaNorm[,1:2] <- NULL
 ccaNorm <- tryCatch(
   {
     result <- sweep(ccaNorm, 2, sizeFactors, "/")
-    message("\tNormalization successful. Saving data to 05_normalized/CCA_ends_normalized.csv\n")
+    message("\tNormalization successful. Saving data to 04_Expression/CCA_ends_normalized.csv\n")
     result
   },
   error = function(e) {
@@ -311,7 +305,7 @@ ccaNorm$tRNA <- ccaNN$tRNA
 ccaNorm$end <- ccaNN$end
 
 #----- Write as a csv to the normalized data folder
-write.csv(ccaNorm, file = "05_normalized/CCA_ends_normalized.csv")
+write.csv(ccaNorm, file = "04_Expression/CCA_ends_normalized.csv")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # PREPARE DATA AND PLOT

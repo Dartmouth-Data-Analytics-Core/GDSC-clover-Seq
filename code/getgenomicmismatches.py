@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+"""
+getgenomicmismatches.py — Detect per-position mismatches in mature tRNA reads.
+
+For each sample BAM, reads the reference tRNA FASTA and compares each aligned
+read sequence against the reference at single-nucleotide resolution. Accumulates
+base-specific mismatch and deletion counts per position. Positions with mismatch
+frequency below a configurable threshold are excluded from the output. Writes:
+  - a tab-delimited mismatch table with per-base substitution counts per sample
+  - a BED file marking high-mismatch positions (score = mismatch fraction x 1000)
+
+Parallelises across samples via multiprocessing.Pool when --cores > 1.
+"""
 
 import pysam
 import sys
@@ -78,6 +90,12 @@ def faitobed(fastafile):
     
 
 class coverageinfo:
+    """Container for all per-sample coverage and mismatch track dicts.
+
+    Each attribute is a dict keyed by feature name holding a readcoverage object.
+    Separate tracks for each nucleotide substitution type (A, T, C, G) allow
+    downstream calculation of per-base mismatch frequencies.
+    """
     def __init__(self, readcounts, allcoverage,readstarts, readends, multaminocoverages, multaccoverages, multtrnacoverages,uniquecoverages, uniquegenomecoverages,multigenomecoverages, readmismatches,adeninemismatches,thyminemismatches,cytosinemismatches, guanosinemismatches, readskips, trimcoverage = None, trimmismatches = None  ):
         self.readcounts = readcounts
         self.allcoverages = allcoverage
@@ -105,6 +123,12 @@ class coverageinfo:
         
         
 class readcoverage:
+    """Per-feature read pileup accumulator (strand-aware).
+
+    addread() increments all positions within a read's span.
+    addbase() increments a single genomic coordinate (used for mismatch tracking);
+    the coordinate is converted to a feature-relative index accounting for strand.
+    """
     def __init__(self, region):
         self.region = region
         self.samplereads = 0
@@ -114,7 +138,7 @@ class readcoverage:
         for i in range(0,region.length()):
             self.coverage.append(0)
 
-                
+
     def coveragelist(self):
         return self.coverage
 
@@ -143,9 +167,16 @@ class readcoverage:
             pass
         
 
-def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,geneseqs,sizefactor, mincoverage, outbed = None, positionnums = None):
+def transcriptcoverage(samplecoverages, mismatchreport, genelist, sampledata, geneseqs, sizefactor, mincoverage, outbed=None, positionnums=None):
+    """Write per-position mismatch rows for all features to mismatchreport.
 
-    print("\t".join(["Feature","Sample","position","coverage","readstarts","readends","readstotal","expreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"]), file=mismatchreport)
+    Only positions where at least one sample exceeds the mismatch fraction
+    threshold (0.05) — or a flanking position does — are written. Positions
+    that exceed the threshold are also emitted to outbed (if provided) as BED
+    intervals with score = mismatch_fraction × 1000. Features with total reads
+    below mincoverage are skipped.
+    """
+    print("\t".join(["Feature","Sample","position","coverage","readstarts","readends","tRNAreadstotal","expreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"]), file=mismatchreport)
     #print >>sys.stderr,mismatchreport
     #print >>sys.stderr,"||***"
     samples = sampledata.getsamples()
@@ -231,8 +262,14 @@ def transcriptcoverage(samplecoverages, mismatchreport, genelist,sampledata,gene
                 print("\t".join([currfeat.name,currsample,posname,str(covcounts[i]),str(allstarts[i]),str(allends[i]),str(1.*samplecoverages[currsample].readcounts[currfeat.name]/sizefactor[currsample]),str(totalreads),realbase,str(mismatches[i]),str(deletions[i]),str(adeninecount[i]),str(thyminecount[i]),str(cytosinecount[i]),str(guanosinecount[i]), str(readskipcount[i])]), file=mismatchreport)
     #sys.exit(1)  
     
-def getsamplecoverage(currsample, sampledata, genelist,geneseqs,maxmismatches = None, minextend = None): 
-    
+def getsamplecoverage(currsample, sampledata, genelist, geneseqs, maxmismatches=None, minextend=None):
+    """Compute per-position coverage and mismatch profiles for one sample BAM.
+
+    For every read overlapping each feature in genelist, aligns the read sequence
+    against the reference from geneseqs (CIGAR-aware, strand-aware) and records
+    per-position mismatches, deletions, and per-nucleotide substitution counts.
+    Returns a coverageinfo object with all tracks populated.
+    """
     currbam = sampledata.getbam(currsample)
     allcoverages = dict()
     multaminocoverages = dict()
@@ -483,21 +520,23 @@ def makelocicoveragepool(args):
 def compressargs( *args, **kwargs):
     return tuple([args, kwargs])
 def main(**argdict):
-    #print >>sys.stderr, argdict
+    """CLI entry point: compute mismatch profiles for mature tRNA features.
+
+    Loads the reference tRNA FASTA, builds the feature list from BED and/or GTF
+    inputs, and dispatches per-sample coverage computation to a Pool. Writes a
+    mismatch table and optional BED file of high-mismatch positions.
+    """
     argdict = defaultdict(lambda: None, argdict)
-    if "edgemargin" not in  argdict:                    
+    if "edgemargin" not in  argdict:
         edgemargin = 0
     else:
         edgemargin = int(argdict["edgemargin"])
-    #currently crashes if set to zero
     if "mincoverage" not in  argdict:
         mincoverage = 100
     else:
-        mincoverage = int(argdict["mincoverage"])  
-    
-    if "bamdir" not in argdict:
-        bamdir = "./"
-    bamdir = argdict["bamdir"]
+        mincoverage = int(argdict["mincoverage"])
+
+    bamdir = argdict["bamdir"] if argdict["bamdir"] is not None else "./"
     sampledata = samplefile(argdict["samplefile"], bamdir = bamdir)
     samples = sampledata.getsamples()
     genomefasta = os.path.expanduser(argdict["genomefasta"])
@@ -527,13 +566,8 @@ def main(**argdict):
     genelist = list(curr for curr in genelist if curr.chrom in chromnames)
     geneseqs = getseqdict(genelist, faifiles = {"genome":genomefasta+".fai"})
     maxmismatches = argdict["maxmismatches"]
-    cores = 8
-    if argdict["cores"] is not None:
-        cores = int(argdict["cores"])
-    
-    threadmode = True
-    if cores == 1:
-        threadmode = False
+    cores = int(argdict["cores"]) if argdict["cores"] is not None else 1
+    threadmode = cores > 1
         
     #uniquegenome = argdict["uniquegenome"]
 

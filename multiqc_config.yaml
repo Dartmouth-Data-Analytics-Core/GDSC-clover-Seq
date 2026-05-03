@@ -1,29 +1,93 @@
-report_header_info:
-  - Contact E-mail:  DataAnalyticsCore@groups.dartmouth.edu
-  - Application Type: "clover-seq"
+# ============================================================================
+# CUSTOM BRANDING - Report Title, Subtitle, and Contact
+# ============================================================================
 
-extra_fn_clean_exts:
-  - ".srt"
-  - ".combined"
-  - ".aln.err"
-  - ".1M"
-  - ".mkdup"
-  - ".hisat"
-  - ".5k"
+# Main report title (appears at top of report)
+title: "GDSC-Clover-Seq Pipeline v2.0"
+
+# Subtitle text (appears below title)
+subtitle: "Analysis of tRNAs"
+
+custom_logo: "docs/img/cqb_logo.jpg"
+custom_logo_url: "https://sites.dartmouth.edu/cqb/files/2019/10/Logo-and-bringing-smaller-300.png"
+
+# Introductory text (appears at top of report, supports HTML/Markdown)
+intro_text: |
+  <p style="text-align: center; font-size: 1.1em;">
+    <em>Authors: Dartmouth Genomic Data Science Core</em><br>
+    For correspondence contact: <a href="mailto:gdsc@groups.dartmouth.edu">gdsc@groups.dartmouth.edu</a>
+  </p>
+
+
+#============================================================================
+# MAIN CONFIG
+#============================================================================
+export_plots: false
+disable_version_detection: true
+
+# Disable default top_modules behavior
+top_modules: []
+
+# Default to plot view instead of table
+table_columns_visible:
+  general_stats: false
+
+# Customize number formatting for General Statistics
+general_stats_columns:
+  - total_reads:
+      format: '{:,.0f}'  # Show full numbers with commas, no decimals
+  - mapped_reads:
+      format: '{:,.0f}'
+  - featureCounts:
+      Assigned:
+        format: '{:,.0f}'
 
 module_order:
-  - "cutadapt"
-  - "bowtie2"
-  - "samtools"
-  - "picard"
-  - "featurecounts"
+  - custom_content
+  - cutadapt
+  - bowtie2
+  - picard
+  - samtools
 
+sp:
+  trna_isotype_abundance:
+    fn: "trna_isotype_abundance_mqc.tsv"
+  cca_tail_status:
+    fn: "cca_tail_status_mqc.tsv"
+  smrna_biotype:
+    fn: "smrna_biotype_mqc.tsv"
 
-        
-table_columns_visible:
-  featureCounts: False  
-  Samtools: False
-
-fn_ignore_files:
-  - "*.flagstat"
-  - "*.idxstats"
+custom_data:
+  trna_isotype_abundance:
+    file_format: 'tsv'
+    section_name: 'tRNA Gene Abundances (Top 20)'
+    description: 'Raw read counts for the 20 most abundant tRNA genes per sample.'
+    plot_type: 'bargraph'
+    pconfig:
+      id: 'trna_isotype_abundance_plot'
+      title: 'tRNA: Top 20 Gene Abundances'
+      ylab: 'Read Counts'
+      cpswitch: true
+      cpswitch_c_active: false
+  cca_tail_status:
+    file_format: 'tsv'
+    section_name: 'CCA Tail Completeness'
+    description: '3&prime; CCA tail completeness summed across all tRNAs per sample. CCA = intact 3&prime; end; CC/C = partially trimmed; Trimmed = 3+ nucleotides removed.'
+    plot_type: 'bargraph'
+    pconfig:
+      id: 'cca_tail_status_plot'
+      title: 'tRNA: CCA Tail Completeness'
+      ylab: 'Read Counts'
+      cpswitch: true
+      cpswitch_c_active: false
+  smrna_biotype:
+    file_format: 'tsv'
+    section_name: 'Small RNA Biotype Distribution'
+    description: 'Distribution of aligned reads across small RNA biotypes per sample.'
+    plot_type: 'bargraph'
+    pconfig:
+      id: 'smrna_biotype_plot'
+      title: 'Small RNA Biotype Distribution'
+      ylab: 'Read Counts'
+      cpswitch: true
+      cpswitch_c_active: false
