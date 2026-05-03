@@ -1,13 +1,21 @@
-# Table of Contents
-- [Introduction](#introduction)
+
+# Dartmouth GDSC Clover-Seq Pipeline
+![Version](https://img.shields.io/badge/version-2.0-blue)
+
+This pipeline provides preprocessing and quality control of tRNA sequencing data. This pipeline has been built and tested using human, mouse, and fly data sets. Major steps of this pipeline include: 
+
+- Trimming of adapters using [*Cutadapt*](https://cutadapt.readthedocs.io/en/stable/)
+- Alignment to custom tRNA databases (mature and pre-tRNA loci) using [*bowtie2*](https://github.com/BenLangmead/bowtie2)
+- Quantification of mature tRNA and tRNA isotype sequences using custom code
+- Mismatch and coverage analyses
+- Quality Control and differential expression analyses using [DESeq2](https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html)
+
+## Documentation
 - [Installation](#installation)
 - [Comprehensive Documentation](#comprehensive-documentation)
 - [Contact](#contact)
 - [Citation and Licensing](#citation-and-licensing)
 
-## Introduction
-
-Modular Snakemake workflows for the comprehensive analyses of mature tRNAs and other small RNAs (smRNAs) from high-throughput sequencing data. 
 
 ## Installation
 
@@ -25,6 +33,8 @@ Several [conda environments](https://anaconda.org/anaconda/conda) are required t
 
 ## Comprehensive Documentation
 
+For extended information on how to configure a job and submit it on the [Dartmouth high-performance compute cluster, Discovery](https://rc.dartmouth.edu/hpc/discovery-overview/) see the links below:
+
 [Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)  
 [Optional Database Building](docs/database.md)  
 [Submitting the Pipeline](docs/submitting.md)  
@@ -35,7 +45,9 @@ Please address questions to **DataAnalyticsCore@groups.dartmouth.edu** or submit
 
 ## Citation and Licensing
 
-**This codebase is adapted from the [original tRAX tool](https://github.com/UCSC-LoweLab/tRAX), licensed under GPL v3.0., modified by Mike Martinez, Dartmouth Genomic Data Science Core** 
+This codebase is adapted from the [original tRAX tool](https://github.com/UCSC-LoweLab/tRAX), licensed under GPL v3.0.
+
+Modifications to modernize and adapt this pipeline for use via Snakemake were made by Mike Martinez, Dartmouth Genomic Data Science Core
 
 **Citation:** [Holmes AD, Howard JM, Chan PP, and Lowe TM.](https://www.biorxiv.org/content/10.1101/2022.07.02.498565v1)
 
