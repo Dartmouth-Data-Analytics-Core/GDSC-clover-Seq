@@ -1,36 +1,54 @@
 #!/bin/bash
 
-#SBATCH --job-name=clvSeq_preproc
+#SBATCH --job-name=clvSeq                           
 #SBATCH --nodes=1
-#SBATCH --partition=standard
+#SBATCH --partition=preempt1
+#SBATCH --account=dac
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16  
 #SBATCH --time=60:00:00
 #SBATCH --mail-user=f007qps@dartmouth.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --output=clvSeq_preproc_%j.out
+#SBATCH --output=%x_%j.log
+#========================================================#
 
-#----- START
+#----- Specify Config (one of "hg38", "mm10", "dm6", case-sensitive and needs to be in quotes.)
+CONFIG="hg38"
+
+#----- Environment information
+CONDA_BASE="/optnfs/common/miniconda3"
+SNAKEMAKE_ENV="/dartfs/rc/nosnapshots/G/GMBSR_refs/envs/snakemake"
+CONDA_PREFIX_PATH="/dartfs/rc/nosnapshots/G/GMBSR_refs/envs/GDSC-Clover-Seq"
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
+conda activate "${SNAKEMAKE_ENV}"
+
+#----- LOGGER
 echo "#------------------------ Initialization ------------------------#"
-echo "Starting job: $SLURM_JOB_NAME (Job ID: $SLURM_JOB_ID)"
-echo "Running on node: $(hostname)"
+echo -e "Running GDSC-CloverSeq Pipeline for "${CONFIG}" with Snakemake $(snakemake --version) \n" 
+echo "Job:        $SLURM_JOB_NAME"
+echo "Job ID:     $SLURM_JOB_ID"
+echo "Node:       $(hostname)"
 echo "Start time: $(date)"
-echo -e "#-------------------------------------------------------------#"
+echo "Work dir:   $(pwd)"
+echo "Conda base: $CONDA_BASE"
+echo "Snakemake environment: $SNAKEMAKE_ENV"
+echo "Using snakemake from: $(which snakemake)"
+echo "Conda Prefix: $CONDA_PREFIX_PATH"
+echo -e "#-------------------------------------------------------------# \n"
+echo -e "SNAKEMAKE LOG:\n"
 
-
-#----- Source conda and activate snakemake
-source /optnfs/common/miniconda3/etc/profile.d/conda.sh
-conda activate /dartfs/rc/nosnapshots/G/GMBSR_refs/envs/snakemake
+#----- Make slurm logs folder
+mkdir -p slurm_logs
 
 #----- Run snakemake workflow
-snakemake -s workflows/module-2-preprocess.smk \
-    --configfile prebuilt_configs/hg38_config.yaml \
+snakemake -s Snakefile \
+    --configfile prebuilt_configs/"${CONFIG}"_config.yaml \
     --use-conda \
     --conda-frontend conda \
-    --conda-prefix /dartfs/rc/nosnapshots/G/GMBSR_refs/envs/GDSC-Clover-Seq \
+    --conda-prefix "${CONDA_PREFIX_PATH}" \
     --profile cluster_profile \
     --rerun-incomplete \
-    --keep-going 
+    --keep-going
     
 #----- END
 echo "End time: $(date)"

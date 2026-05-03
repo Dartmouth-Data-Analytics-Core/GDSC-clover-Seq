@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""
+getcoverage.py — Compute per-position read coverage across mature tRNA features.
+
+For each sample BAM, accumulates strand-specific read coverage, mismatch
+profiles, and nucleotide-level base counts at single-nucleotide resolution.
+Coverage vectors are aligned to the Stockholm consensus alignment via Sprinzl
+position numbering when --stkfile is provided. Outputs a tab-delimited coverage
+table with columns for coverage, read starts/ends, mismatch counts, and
+per-nucleotide substitution counts. Parallelises across samples via
+multiprocessing.Pool when cores > 1.
+"""
 
 import pysam
 import sys
@@ -45,6 +56,14 @@ def cigarrefcoverage(cigar):
 
 gapchars = set("-._~")
 class readcoverage:
+    """Per-feature read pileup accumulator.
+
+    Stores a per-position integer coverage vector sized to the feature length.
+    addread() increments positions covered by a BAM read (strand-aware).
+    addbase() increments a single genomic position (used for mismatch tracking).
+    coveragealign() projects the coverage vector onto a Stockholm alignment,
+    inserting gap values at alignment columns that have no sequence.
+    """
     def __init__(self, region):
         self.region = region
         self.samplereads = 0
@@ -54,7 +73,7 @@ class readcoverage:
         for i in range(0,region.length()):
             self.coverage.append(0)
 
-                
+
     def coveragelist(self):
         return self.coverage
     def coveragealign(self, alignment, gapoutput = None,sizefactor = 1):          
@@ -197,6 +216,13 @@ def gettnanums(trnaalign, margin = 0, orgtype = "euk"):
     return trnanum
     
 class coverageinfo:
+    """Container for all per-sample coverage track dicts returned by getsamplecoverage.
+
+    Each attribute is a dict keyed by feature name holding a readcoverage object.
+    Coverage is stratified by mapping uniqueness level (unique genome, multi-genome,
+    unique tRNA, multi-anticodon, multi-amino) to support downstream analysis of
+    multimapper contributions.
+    """
     def __init__(self, readcounts, allcoverage,readstarts, readends, multaminocoverages, multaccoverages, multtrnacoverages,uniquecoverages, uniquegenomecoverages,multigenomecoverages, readmismatches,adeninemismatches,thyminemismatches,cytosinemismatches, guanosinemismatches, readskips, trimcoverage = None, trimmismatches = None  ):
         self.readcounts = readcounts
         self.allcoverages = allcoverage
@@ -228,7 +254,13 @@ class locicoverageinfo:
     def __init__(self, readcounts, allcoverage):
         self.readcounts = readcounts
         self.allcoverages = allcoverage
-def getlocicoverage(currsample, sampledata, trnaloci,maxmismatches = None, minextend = None): 
+def getlocicoverage(currsample, sampledata, trnaloci, maxmismatches=None, minextend=None):
+    """Accumulate coverage over pre-tRNA loci for one sample.
+
+    Reads must extend at least minextend nt beyond the locus boundary to be
+    counted, distinguishing pre-tRNA reads from mature tRNA reads.
+    Returns a locicoverageinfo with readcounts and allcoverages dicts.
+    """
     currbam = sampledata.getbam(currsample)
     allcoverages = dict()
     readcounts = dict()
@@ -260,8 +292,15 @@ def getlocicoverage(currsample, sampledata, trnaloci,maxmismatches = None, minex
                 
     return locicoverageinfo( readcounts, allcoverages)
 
-def getsamplecoverage(currsample, sampledata, trnalist, trnaseqs,maxmismatches = None, minextend = None, removestart = True, uniqueonly = False): 
-    
+def getsamplecoverage(currsample, sampledata, trnalist, trnaseqs, maxmismatches=None, minextend=None, removestart=True, uniqueonly=False):
+    """Compute per-position coverage and mismatch profiles for one sample.
+
+    For every read overlapping each tRNA in trnalist, increments coverage tracks
+    and compares the aligned sequence against trnaseqs to populate per-nucleotide
+    mismatch and deletion vectors. Coverage is stratified into uniqueness tiers
+    (unique/multi-anticodon/multi-amino/multi-genome) by the read's mapping tags.
+    Returns a coverageinfo object with all tracks populated.
+    """
     currbam = sampledata.getbam(currsample)
     allcoverages = dict()
     multaminocoverages = dict()
@@ -395,9 +434,13 @@ def getsamplecoverage(currsample, sampledata, trnalist, trnaseqs,maxmismatches =
 
     return coverageinfo( readcounts, allcoverages,readstarts, readends,multaminocoverages, multaccoverages, multtrnacoverages,uniquecoverages, uniquegenomecoverages,multigenomecoverages, readmismatches,adeninemismatches,thyminemismatches,cytosinemismatches, guanosinemismatches,readskips,trimmismatches = trimreadmismatches, trimcoverage = trimreadcoverage  )
 
-def transcriptcoverage(samplecoverages, mismatchreport, trnalist,sampledata,sizefactor, mincoverage, trnastk, positionnums, skipgaps = True):
+def transcriptcoverage(samplecoverages, mismatchreport, trnalist, sampledata, sizefactor, mincoverage, trnastk, positionnums, skipgaps=True):
+    """Write per-position coverage and mismatch rows for all tRNAs to mismatchreport.
 
-    #print >>mismatchreport, "\t".join(["Feature","Sample","position","coverage","readstarts","readends","uniquecoverage","multitrnacoverage","multianticodoncoverage","multiaminocoverage","tRNAreadstotal","actualbase","mismatchedbases","deletedbases","adenines","thymines","cytosines","guanines","deletions"])
+    Skips tRNAs whose total read count (across all samples) is below mincoverage.
+    Positions labelled 'gap' in the Sprinzl numbering are skipped when skipgaps
+    is True. Coverage values are divided by the per-sample size factor before output.
+    """
     #print >>sys.stderr,mismatchreport
     #print >>sys.stderr,"||***"
     samples = sampledata.getsamples()
@@ -626,9 +669,14 @@ def makelocicoveragepool(args):
 def compressargs( *args, **kwargs):
     return tuple([args, kwargs])
 def testmain(**argdict):
-    #print >>sys.stderr, argdict
+    """Development entry point for STK-alignment-based coverage with locus tracking.
+
+    Processes tRNA loci in chunks of 50 to limit peak memory usage, parallelising
+    each chunk across samples. Not called from the CLI; the production entry
+    point is main().
+    """
     argdict = defaultdict(lambda: None, argdict)
-    if "edgemargin" not in  argdict:                    
+    if "edgemargin" not in  argdict:
         edgemargin = 0
     else:
         edgemargin = int(argdict["edgemargin"])
@@ -638,9 +686,7 @@ def testmain(**argdict):
     else:
         mincoverage = int(argdict["mincoverage"])  
     
-    if "bamdir" not in argdict:
-        bamdir = "./"
-    bamdir = argdict["bamdir"]
+    bamdir = argdict["bamdir"] if argdict["bamdir"] is not None else "./"
     sampledata = samplefile(argdict["samplefile"], bamdir = bamdir)
     trnafasta = argdict["trnafasta"]
     
@@ -651,10 +697,8 @@ def testmain(**argdict):
         
     maxmismatches = argdict["maxmismatches"]
     #uniquename = argdict["uniquename"]
-    cores = argdict["cores"]
-    threadmode = True
-    if cores == 1:
-        threadmode = False
+    cores = argdict["cores"] if argdict["cores"] is not None else 1
+    threadmode = cores > 1
         
     #uniquegenome = argdict["uniquegenome"]
     trnastk = list(readrnastk(open(argdict["stkfile"], "r")))[0]
@@ -797,19 +841,23 @@ def testmain(**argdict):
     locicoveragetable.close()
         
 def main(**argdict):
-    #print >>sys.stderr, argdict
+    """CLI entry point: compute per-position coverage for mature tRNA features.
+
+    Reads BAM files listed in samplefile, calculates strand-specific pileup and
+    per-nucleotide mismatch/substitution profiles for each tRNA in the BED file,
+    and writes a tab-delimited coverage table. Optionally stratifies coverage by
+    mapping uniqueness. Uses multiprocessing.Pool to parallelise across samples.
+    """
     argdict = defaultdict(lambda: None, argdict)
     if "edgemargin" not in  argdict:
         edgemargin = 0
     else:
         edgemargin = int(argdict["edgemargin"])
-    #currently crashes if set to zero
     if "mincoverage" not in  argdict:
         mincoverage = 10
     else:
-        mincoverage = int(argdict["mincoverage"])  
-    
-        
+        mincoverage = int(argdict["mincoverage"])
+
     sampledata = samplefile(argdict["samplefile"])
 
     maxmismatches = argdict["maxmismatches"]

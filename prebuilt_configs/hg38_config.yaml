@@ -6,7 +6,8 @@
 # Author:          Mike Martinez (Genomic Data Science Core - Dartmouth)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # Instructions:
-# - Fill in each parameter as needed.
+# - Fill in each parameter as needed for GENERAL SETTINGS
+# - Only modify other sections at your own risk!
 # - Maintain consistent formatting (YAML is space and case-sensitive).
 # - Indent with spaces, not tabs.
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -15,10 +16,9 @@
 # GENERAL SETTINGS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 sample_txt: "Sample_list_SE.txt"
-runFile: "runfile.txt"
 layout: "single"
 genome: "hg38"
-refLevel: "WT"
+refLevel: "shGFP"
 build_database: false
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -57,3 +57,8 @@ nPenalty: "5"
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 log2FC_magnitude_threshold: 1
 padj_threshold: 0.05
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# DO NOT EDIT
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+runFile: "runfile.txt"

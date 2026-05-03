@@ -48,16 +48,16 @@ refLevel <- args[2]
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # SET DIRECTORIES
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-trnaDir       <- "03_tRNA_counts/"
-normalizedDir <- "05_normalized/"
-pcaDir        <- "06_PCA/"
-rdsDir        <- "07_rds_files/"
-deDir         <- "Differential_Expression/"
+trnaDir       <- "03_Raw_Quant/tRNA_counts/"
+normalizedDir <- "04_Expression/"
+pcaDir        <- "07_Plots/PCA/"
+rdsDir        <- "04_Expression/"
+deDir         <- "04_Expression/Differential_Expression/"
 
-if (!dir.exists(normalizedDir)) dir.create(normalizedDir)
-if (!dir.exists(pcaDir))        dir.create(pcaDir)
-if (!dir.exists(rdsDir))        dir.create(rdsDir)
-if (!dir.exists(deDir))         dir.create(deDir)
+if (!dir.exists(normalizedDir)) dir.create(normalizedDir, recursive = TRUE)
+if (!dir.exists(pcaDir))        dir.create(pcaDir,        recursive = TRUE)
+if (!dir.exists(rdsDir))        dir.create(rdsDir,        recursive = TRUE)
+if (!dir.exists(deDir))         dir.create(deDir,         recursive = TRUE)
 
 message("--------------------------------------------------")
 message(paste("Input directories:", trnaDir, sep = "\n\t"))

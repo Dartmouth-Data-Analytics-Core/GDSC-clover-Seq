@@ -1,0 +1,8 @@
+.snakemake
+01_trimming/*
+02_tRNA_alignment/*
+03_Raw_Quant/*
+04_Expression/*
+05_Mismatches/*
+06_Coverages/*
+07_Plots/*

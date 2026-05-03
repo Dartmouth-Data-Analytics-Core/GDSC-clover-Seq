@@ -1,14 +1,24 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# Clover-Seq tRNA data processing workflow
-#
+# Clover-Seq version 3.0
 # This code was modified from tRAX (doi: 10.1101/2022.07.02.498565)
+# and adapted for use on Dartmouth HPC via Snakemake.
+# tRNA databases are built and hosted by the Dartmouth 
+# Genomic Data Science Core (GDSC)
 #
-# Modified by Mike Martinez (Genomic Data Science Core - Dartmouth)
+# Author: Mike Martinez
+# Date last updated: May 2nd, 2026
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # SET GLOBAL SCOPE PYTHON VARIABLES (EXECUTED BEFORE SNAKEMAKE)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# TO DO
+# - Optimize count_all_smRNA.py
+# - Optimize getCoverage.py
+# - Optimize getMismatches.py
+# - Make sure DESeq2 script is outputting png and not pdf
+# - Custom MultiQC reporting and branding
+# - Change clusterProfile and job script back to use standard partition
 
 import pandas as pd
 import csv
@@ -80,44 +90,47 @@ rule all:
         expand("02_tRNA_alignment/{sample}.srt.bam", sample=sample_list),
 
         #----- Rule tRNA_mark_duplicates outputs
-        expand("02_tRNA_alignment/{sample}.mkdup.bam", sample=sample_list),
-        expand("02_tRNA_alignment/{sample}.mkdup.log.txt", sample=sample_list),
+        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list),
+        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.log.txt", sample=sample_list),
 
         #----- Rule tRNA_map_stats outputs
         expand("02_tRNA_alignment/stats/{sample}.mkdup.bam.idxstats", sample=sample_list),
         expand("02_tRNA_alignment/stats/{sample}.mkdup.bam.flagstat", sample=sample_list),
 
         #----- Rule tRNA_count outputs
-        expand("03_tRNA_counts/{file}", file=[
+        expand("03_Raw_Quant/tRNA_counts/{file}", file=[
             "genetype_counts.txt",
             "tRNA_isotype_counts.txt",
             "gene_level_counts_detailed.txt",
             "gene_level_counts_collapsed.txt",
-            "tRNA_ends_counts.txt",
-            "mature_tRNA_coverages.txt",
-            "mature_tRNA_mismatches.txt",
-            "mature_tRNA_mismatches.bed"]),
-        directory("03_tRNA_counts/mismatch_heatmaps"),
+            "tRNA_ends_counts.txt"]),
+
+        #----- Rule get_mismatches outputs
+        "05_Mismatches/mature_tRNA_mismatches.txt",
+        "05_Mismatches/mature_tRNA_mismatches.bed",
+        "05_Mismatches/heatmaps",
 
         #----- Rule read_length_distribution outputs
         "02_tRNA_alignment/full_alignment_read_length_distribution.txt",
 
         #----- Rule count_smRNAs outputs
-        expand("04_smRNA_counts/{file}", file=[
-            "raw_amino_counts_by_group.txt",
+        "03_Raw_Quant/raw_amino_counts_by_group.txt",
+        "03_Raw_Quant/raw_anticodon_counts_by_sample.txt",
+        expand("03_Raw_Quant/other_smRNAs/{file}", file=[
             "read_length_distribution.txt",
             "smRNA_raw_counts_by_group.txt",
             "smRNA_raw_counts_by_sample.txt",
-            "subroup_counts.txt",
-            "raw_anticodon_counts_by_sample.txt"]),
+            "subroup_counts.txt"]),
 
         #----- Rule normalize_and_PCA outputs
-        expand("05_normalized/{file}", file=[
+        expand("04_Expression/{file}", file=[
             "gene_level_counts_size_factors.csv",
             "normalized_gene_level_counts.csv",
             "tRNA_isotype_counts_size_factors.csv",
-            "normalized_tRNA_isotype_counts.csv"]),
-        expand("06_PCA/{file}", file=[
+            "normalized_tRNA_isotype_counts.csv",
+            "gene_level_DESeq2_object.Rds",
+            "tRNA_isotype_DESeq2_object.Rds"]),
+        expand("07_Plots/PCA/{file}", file=[
             "gene_level_variance_plot.png",
             "gene_level_loadings.csv",
             "gene_level_PCA.png",
@@ -125,12 +138,12 @@ rule all:
             "tRNA_isotype_loadings.csv",
             "tRNA_isotype_PCA.png",
             "PCA_Analysis_Summary.png"]),
-        expand("07_rds_files/{file}", file=[
-            "gene_level_DESeq2_object.Rds",
-            "tRNA_isotype_DESeq2_object.Rds"]),
+
+        #----- Rule get_tRNA_coverage outputs
+        "06_Coverages/mature_tRNA_coverages.txt",
 
         #----- Rule plot_counts outputs
-        expand("08_plots/{file}", file=[
+        expand("07_Plots/{file}", file=[
             "Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png",
             "Isoacceptor_counts_by_sample_normalized.png",
             "Isoacceptor_counts_normalized.png",
@@ -155,13 +168,13 @@ rule all:
             01_trimming/logs \
             02_tRNA_alignment \
             02_tRNA_alignment/stats \
-            03_tRNA_counts \
+            03_Raw_Quant/tRNA_counts \
             -n 09_QC/tRNA_multi_QC_report.html \
             -c multiqc_config.yaml
 
         #----- Clean redundant file
-        if [ -f 03_tRNA_counts/unique_tRNA_counts.txt ]; then
-            rm 03_tRNA_counts/unique_tRNA_counts.txt
+        if [ -f 03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt ]; then
+            rm 03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt
         fi
 
     """
@@ -209,14 +222,13 @@ rule tRNA_align:
 
         #----- Run Bowtie2 alignment (bowtie2 stats → alignLog, pipeline stderr → log)
         bowtie2 \
+            --local \
             -x {params.bt2_index} \
             -U {input.trim_1} \
-            -D 20 -R 3 -N 1 -L 12 -i S,1,0.50 \
             -k {params.maxMaps} \
             --very-sensitive \
             --np {params.nPenalty} \
-            --norc \
-            --ignore-qual \
+            --ignore-quals \
             -p {resources.cpus} \
             -S 02_tRNA_alignment/{params.sample}.aln.sam 2> {log}
 
@@ -238,12 +250,12 @@ rule tRNA_mark_duplicates:
     input:
         bam = "02_tRNA_alignment/{sample}.srt.bam"
     output:
-        mkdup    = "02_tRNA_alignment/{sample}.mkdup.bam",
-        mkdupLog = "02_tRNA_alignment/{sample}.mkdup.log.txt"
+        mkdup    = "02_tRNA_alignment/duplicates/{sample}.mkdup.bam",
+        mkdupLog = "02_tRNA_alignment/duplicates/{sample}.mkdup.log.txt"
     log:     "02_tRNA_alignment/logs/{sample}.picard.log"
     message: "Marking duplicates: {wildcards.sample}"
     conda: "env_config/Picard.yaml"
-    resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
+    resources: cpus="12", maxtime="6:00:00", mem_mb="100gb"
     params:
         sample = lambda wildcards: wildcards.sample
     shell: """
@@ -268,7 +280,7 @@ rule tRNA_mark_duplicates:
 #----- Rule to collate tRNA mapping statistics
 rule tRNA_map_stats:
     input:
-        mkdup = "02_tRNA_alignment/{sample}.mkdup.bam"
+        mkdup = "02_tRNA_alignment/duplicates/{sample}.mkdup.bam"
     output:
         idxStats  = "02_tRNA_alignment/stats/{sample}.mkdup.bam.idxstats",
         flagStats = "02_tRNA_alignment/stats/{sample}.mkdup.bam.flagstat"
@@ -288,13 +300,13 @@ rule tRNA_map_stats:
 #----- Rule to count tRNAs
 rule tRNA_count:
     input:
-        expand("02_tRNA_alignment/{sample}.mkdup.bam", sample=sample_list)
+        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
     output:
-        genetypeFile        = "03_tRNA_counts/genetype_counts.txt",
-        tRNA_isotype_counts = "03_tRNA_counts/tRNA_isotype_counts.txt",
-        trnaCountsDetailed  = "03_tRNA_counts/gene_level_counts_detailed.txt",
-        trnaCountsCollapsed = "03_tRNA_counts/gene_level_counts_collapsed.txt",
-        trnaEnds            = "03_tRNA_counts/tRNA_ends_counts.txt"
+        genetypeFile        = "03_Raw_Quant/tRNA_counts/genetype_counts.txt",
+        tRNA_isotype_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
+        trnaCountsDetailed  = "03_Raw_Quant/tRNA_counts/gene_level_counts_detailed.txt",
+        trnaCountsCollapsed = "03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt",
+        trnaEnds            = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt"
     message: "Counting tRNA reads across all samples"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="10", maxtime="2:00:00", mem_mb="60gb"
@@ -313,7 +325,8 @@ rule tRNA_count:
             --trnatable={params.trna_db}/db-trnatable.txt \
             --genetypefile={output.genetypeFile} \
             --trnaends={output.trnaEnds} \
-            --trnacounts={output.tRNA_isotype_counts} > {output.trnaCountsDetailed}
+            --trnacounts={output.tRNA_isotype_counts} \
+            --cores={resources.cpus} > {output.trnaCountsDetailed}
 
         #----- Collapse detailed tRNA counts to isotype-level counts
         awk '
@@ -348,7 +361,7 @@ rule tRNA_count:
 #----- Rule to plot read-length distributions for all aligned reads
 rule read_length_distribution:
     input:
-        expand("02_tRNA_alignment/{sample}.mkdup.bam", sample=sample_list)
+        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
     output:
         distribution = "02_tRNA_alignment/full_alignment_read_length_distribution.txt"
     message: "Calculating read length distributions"
@@ -377,14 +390,14 @@ rule read_length_distribution:
 #----- Rule to count other smRNAs
 rule count_smRNAs:
     input:
-        expand("02_tRNA_alignment/{sample}.mkdup.bam", sample=sample_list)
+        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
     output:
-        aminoCounts    = "04_smRNA_counts/raw_amino_counts_by_group.txt",
-        readLengths    = "04_smRNA_counts/read_length_distribution.txt",
-        groupCounts    = "04_smRNA_counts/smRNA_raw_counts_by_group.txt",
-        counts         = "04_smRNA_counts/smRNA_raw_counts_by_sample.txt",
-        subGroupFile   = "04_smRNA_counts/subroup_counts.txt",
-        anticodonCounts = "04_smRNA_counts/raw_anticodon_counts_by_sample.txt"
+        aminoCounts     = "03_Raw_Quant/raw_amino_counts_by_group.txt",
+        anticodonCounts = "03_Raw_Quant/raw_anticodon_counts_by_sample.txt",
+        readLengths     = "03_Raw_Quant/other_smRNAs/read_length_distribution.txt",
+        groupCounts     = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_group.txt",
+        counts          = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt",
+        subGroupFile    = "03_Raw_Quant/other_smRNAs/subroup_counts.txt"
     message: "Counting smRNA reads across all samples"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -413,22 +426,22 @@ rule count_smRNAs:
 #----- Rule to normalize counts and generate PCA
 rule normalize_and_PCA:
     input:
-        geneLevelCounts = "03_tRNA_counts/gene_level_counts_collapsed.txt",
-        isoformCounts   = "03_tRNA_counts/tRNA_isotype_counts.txt"
+        geneLevelCounts = "03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt",
+        isoformCounts   = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt"
     output:
-        "05_normalized/gene_level_counts_size_factors.csv",
-        "05_normalized/normalized_gene_level_counts.csv",
-        "06_PCA/gene_level_variance_plot.png",
-        "06_PCA/gene_level_loadings.csv",
-        "06_PCA/gene_level_PCA.png",
-        "05_normalized/tRNA_isotype_counts_size_factors.csv",
-        "05_normalized/normalized_tRNA_isotype_counts.csv",
-        "06_PCA/tRNA_isotype_variance_plot.png",
-        "06_PCA/tRNA_isotype_loadings.csv",
-        "06_PCA/tRNA_isotype_PCA.png",
-        "06_PCA/PCA_Analysis_Summary.png",
-        "07_rds_files/gene_level_DESeq2_object.Rds",
-        "07_rds_files/tRNA_isotype_DESeq2_object.Rds"
+        "04_Expression/gene_level_counts_size_factors.csv",
+        "04_Expression/normalized_gene_level_counts.csv",
+        "07_Plots/PCA/gene_level_variance_plot.png",
+        "07_Plots/PCA/gene_level_loadings.csv",
+        "07_Plots/PCA/gene_level_PCA.png",
+        "04_Expression/tRNA_isotype_counts_size_factors.csv",
+        "04_Expression/normalized_tRNA_isotype_counts.csv",
+        "07_Plots/PCA/tRNA_isotype_variance_plot.png",
+        "07_Plots/PCA/tRNA_isotype_loadings.csv",
+        "07_Plots/PCA/tRNA_isotype_PCA.png",
+        "07_Plots/PCA/PCA_Analysis_Summary.png",
+        "04_Expression/gene_level_DESeq2_object.Rds",
+        "04_Expression/tRNA_isotype_DESeq2_object.Rds"
     message: "Normalizing counts and generating PCA"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -448,9 +461,9 @@ rule normalize_and_PCA:
 #----- Rule to get tRNA coverages
 rule get_tRNA_coverage:
     input:
-        sizeFactors = "05_normalized/gene_level_counts_size_factors.csv"
+        sizeFactors = "04_Expression/gene_level_counts_size_factors.csv"
     output:
-        coverages = "03_tRNA_counts/mature_tRNA_coverages.txt"
+        coverages = "06_Coverages/mature_tRNA_coverages.txt"
     message: "Calculating tRNA coverages"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -483,11 +496,11 @@ rule get_tRNA_coverage:
 #----- Rule to detect mismatches for mature tRNAs
 rule get_mismatches:
     input:
-        sizeFactors = "05_normalized/gene_level_counts_size_factors.csv"
+        sizeFactors = "04_Expression/gene_level_counts_size_factors.csv"
     output:
-        mismatches = "03_tRNA_counts/mature_tRNA_mismatches.txt",
-        outBed     = "03_tRNA_counts/mature_tRNA_mismatches.bed",
-        heatmapDir = directory("03_tRNA_counts/mismatch_heatmaps")
+        mismatches = "05_Mismatches/mature_tRNA_mismatches.txt",
+        outBed     = "05_Mismatches/mature_tRNA_mismatches.bed",
+        heatmapDir = directory("05_Mismatches/heatmaps")
     message: "Detecting tRNA mismatches and generating heatmaps"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -523,15 +536,15 @@ rule get_mismatches:
 #----- Rule to generate count plots
 rule plot_counts:
     input:
-        "05_normalized/normalized_tRNA_isotype_counts.csv",
-        "03_tRNA_counts/mature_tRNA_coverages.txt"
+        "04_Expression/normalized_tRNA_isotype_counts.csv",
+        "06_Coverages/mature_tRNA_coverages.txt"
     output:
-        "08_plots/Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png",
-        "08_plots/Isoacceptor_counts_by_sample_normalized.png",
-        "08_plots/Isoacceptor_counts_normalized.png",
-        "08_plots/CCA_ends_Relative_Abundances.png",
-        "08_plots/CCA_ends_normalized_absolute_abundances.png",
-        "08_plots/smRNA_Relative_Abundances.png"
+        "07_Plots/Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png",
+        "07_Plots/Isoacceptor_counts_by_sample_normalized.png",
+        "07_Plots/Isoacceptor_counts_normalized.png",
+        "07_Plots/CCA_ends_Relative_Abundances.png",
+        "07_Plots/CCA_ends_normalized_absolute_abundances.png",
+        "07_Plots/smRNA_Relative_Abundances.png"
     message: "Generating count and coverage plots"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -549,5 +562,5 @@ rule plot_counts:
 
         #----- Run coverage visualization script
         Rscript {params.covPlots} \
-            03_tRNA_counts/mature_tRNA_coverages.txt
+            06_Coverages/mature_tRNA_coverages.txt
     """

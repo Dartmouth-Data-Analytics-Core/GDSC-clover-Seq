@@ -35,10 +35,10 @@ if (!file.exists(covFile)) {
 }
 
 #----- Set input directories
-trnaDir <- "03_tRNA_counts/"
+trnaDir <- "06_Coverages/"
 
 #----- Set output directory and create
-opDir <- "08_plots/mature_tRNA_coverages/"
+opDir <- "06_Coverages/"
 if (!dir.exists(opDir)) {
   dir.create(opDir)
 }

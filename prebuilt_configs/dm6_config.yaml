@@ -15,7 +15,6 @@
 # GENERAL SETTINGS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 sample_txt: "Sample_list_SE.txt"
-runFile: "runfile.txt"
 layout: "single"
 genome: "dm6"
 refLevel: "WT"
@@ -57,3 +56,8 @@ nPenalty: "5"
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 log2FC_magnitude_threshold: 1
 padj_threshold: 0.05
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# DO NOT EDIT
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+runFile: "runfile.txt"
