@@ -151,11 +151,16 @@ rule all:
             "CCA_ends_normalized_absolute_abundances.png",
             "smRNA_Relative_Abundances.png"]),
 
+        #----- Rule generate_mqc_content outputs
+        "08_QC/mqc_custom_content/trna_isotype_abundance_mqc.tsv",
+        "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
+        "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv",
+
         #----- Database build outputs (only when build_database: true)
         db_build_outputs
 
     output:
-        "09_QC/tRNA_multi_QC_report.html"
+        "08_QC/tRNA_multi_QC_report.html"
     message: "Generating MultiQC report"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="10", maxtime="2:00:00", mem_mb="60gb"
@@ -169,7 +174,8 @@ rule all:
             02_tRNA_alignment \
             02_tRNA_alignment/stats \
             03_Raw_Quant/tRNA_counts \
-            -n 09_QC/tRNA_multi_QC_report.html \
+            08_QC/mqc_custom_content \
+            -n 08_QC/tRNA_multi_QC_report.html \
             -c multiqc_config.yaml
 
         #----- Clean redundant file
@@ -563,4 +569,29 @@ rule plot_counts:
         #----- Run coverage visualization script
         Rscript {params.covPlots} \
             06_Coverages/mature_tRNA_coverages.txt
+    """
+
+#----- Rule to generate MultiQC custom content files
+rule generate_mqc_content:
+    input:
+        gene_level_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
+        ends_counts       = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
+        biotype_counts    = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt"
+    output:
+        isotype = "08_QC/mqc_custom_content/trna_isotype_abundance_mqc.tsv",
+        cca     = "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
+        biotype = "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv"
+    message: "Generating MultiQC custom content"
+    conda: "env_config/clover-seq.yaml"
+    resources: cpus="1", maxtime="0:30:00", mem_mb="8gb"
+    params:
+        script = "code/generate_mqc_custom_content.py"
+    shell: """
+
+        python {params.script} \
+            --gene-level-counts {input.gene_level_counts} \
+            --ends-counts       {input.ends_counts} \
+            --biotype-counts    {input.biotype_counts} \
+            --output-dir        08_QC/mqc_custom_content
+
     """

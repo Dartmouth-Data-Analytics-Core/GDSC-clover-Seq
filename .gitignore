@@ -6,3 +6,11 @@
 05_Mismatches/*
 06_Coverages/*
 07_Plots/*
+08_QC/*
+slurm_logs/*
+*.log 
+*.out 
+data/*
+coverage.tmp.txt
+Rplots.pdf
+runfile.txt
