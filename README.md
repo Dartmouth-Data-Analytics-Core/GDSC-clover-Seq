@@ -25,10 +25,10 @@ Several [conda environments](https://anaconda.org/anaconda/conda) are required t
 
 ## Comprehensive Documentation
 
-[Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)
-[Optional Database Building](docs/database.md)
-[Submitting the Pipeline](docs/submitting.md)
-[Understanding the Outputs](docs/Understanding_the_Outputs.md)
+[Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)  
+[Optional Database Building](docs/database.md)  
+[Submitting the Pipeline](docs/submitting.md)  
+[Understanding the Outputs](docs/Understanding_the_Outputs.md)  
 
 ## Contact
 Please address questions to **DataAnalyticsCore@groups.dartmouth.edu** or submit an issue in the GitHub repository.
