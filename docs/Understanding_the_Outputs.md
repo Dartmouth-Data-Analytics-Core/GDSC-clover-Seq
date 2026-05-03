@@ -14,7 +14,7 @@ This document describes every output file produced by the Clover-Seq Snakemake p
 05_Mismatches/        Per-position mismatch profiles and heatmaps
 06_Coverages/         Per-position read coverage across mature tRNAs
 07_Plots/             Publication-ready figures
-09_QC/                Aggregated MultiQC quality report
+08_QC/                Aggregated MultiQC quality report
 ```
 
 ---
@@ -385,9 +385,9 @@ Stacked bar chart showing the relative contribution of each RNA biotype (tRNA, m
 
 ---
 
-## 09_QC/
+## 08_QC/
 
-### `09_QC/tRNA_multi_QC_report.html`
+### `08_QC/tRNA_multi_QC_report.html`
 **Rule:** `rule all` → MultiQC
 
 Aggregated HTML quality report consolidating:
