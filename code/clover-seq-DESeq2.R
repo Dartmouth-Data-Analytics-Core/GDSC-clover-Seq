@@ -240,7 +240,7 @@ runDE <- function(dds, normCounts, meta, comparisons, typename, deDir) {
   colnames(logcols)  <- paste("log2", colnames(logcols),  sep = "_")
   colnames(padjcols) <- paste("padj", colnames(padjcols), sep = "_")
   allcombinevals <- as.matrix(cbind(logcols, padjcols, medcountmat))
-  write.table(allcombinevals, paste0(deDir, typename, "_combine.txt"), col.names = NA)
+  write.csv(allcombinevals, paste0(deDir, typename, "_combine.csv"))
   message(paste0("\tWrote combined table for ", typename))
   message("--------------------------------------------------")
 }
