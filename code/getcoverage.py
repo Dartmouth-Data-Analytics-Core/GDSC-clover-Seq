@@ -1054,15 +1054,31 @@ if __name__ == "__main__":
                        help='Name for files showing unique and non-unique genome reads')
     parser.add_argument('--maxmismatches', default=None,
                        help='Set maximum number of allowable mismatches')
-    '''
-    parser.add_argument('--trnapositions', action="store_true", default=False,
-                       help='Use tRNA positions')
-    '''
-    
-    
-    '''
-    Perform check on sizefactor file to ensure it has all samples
-    '''
+    # testmain / full-coverage mode (mirrors processsamples.py gettrnacoverage)
+    parser.add_argument('--trnafasta',
+                       help='FASTA of mature tRNA sequences; enables full coverage mode')
+    parser.add_argument('--locibed', nargs='+', default=None,
+                       help='BED file(s) with pre-tRNA loci')
+    parser.add_argument('--locistk',
+                       help='Stockholm alignment of tRNA loci')
+    parser.add_argument('--allcoverage',
+                       help='Output file for mature tRNA coverage table')
+    parser.add_argument('--locicoverage',
+                       help='Output file for pre-tRNA locus coverage table')
+    parser.add_argument('--numfile',
+                       help='Alignment position number file (db-alignnum.txt)')
+    parser.add_argument('--locinums',
+                       help='Locus alignment position number file (db-locusnum.txt)')
+    parser.add_argument('--lociedgemargin', type=int, default=30,
+                       help='Edge margin for locus coverage (default 30)')
+    parser.add_argument('--cores', type=int, default=1,
+                       help='Number of parallel worker processes (default 1)')
+    parser.add_argument('--uniqueonly', action='store_true', default=False,
+                       help='Report only uniquely mapping reads')
+
     args = parser.parse_args()
     argdict = vars(args)
-    main(**argdict)
+    if argdict.get('trnafasta'):
+        testmain(**argdict)
+    else:
+        main(**argdict)

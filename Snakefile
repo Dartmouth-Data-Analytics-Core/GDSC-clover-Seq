@@ -86,16 +86,12 @@ rule all:
         #----- Rule trimming outputs
         expand("01_trimming/{sample}.R1.trim.fastq.gz", sample=sample_list),
 
-        #----- Rule tRNA_align outputs
+        #----- Rule tRNA_bowtie2 / tRNA_choosemappings outputs
         expand("02_tRNA_alignment/{sample}.srt.bam", sample=sample_list),
 
-        #----- Rule tRNA_mark_duplicates outputs
-        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list),
-        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.log.txt", sample=sample_list),
-
         #----- Rule tRNA_map_stats outputs
-        expand("02_tRNA_alignment/stats/{sample}.mkdup.bam.idxstats", sample=sample_list),
-        expand("02_tRNA_alignment/stats/{sample}.mkdup.bam.flagstat", sample=sample_list),
+        expand("02_tRNA_alignment/stats/{sample}.srt.bam.idxstats", sample=sample_list),
+        expand("02_tRNA_alignment/stats/{sample}.srt.bam.flagstat", sample=sample_list),
 
         #----- Rule tRNA_count outputs
         expand("03_Raw_Quant/tRNA_counts/{file}", file=[
@@ -103,17 +99,15 @@ rule all:
             "tRNA_isotype_counts.txt",
             "gene_level_counts_detailed.txt",
             "gene_level_counts_collapsed.txt",
-            "tRNA_ends_counts.txt"]),
+            "tRNA_ends_counts.txt",
+            "unique_tRNA_counts.txt"]),
 
         #----- Rule get_mismatches outputs
         "05_Mismatches/mature_tRNA_mismatches.txt",
         "05_Mismatches/mature_tRNA_mismatches.bed",
         "05_Mismatches/heatmaps",
 
-        #----- Rule read_length_distribution outputs
-        "02_tRNA_alignment/full_alignment_read_length_distribution.txt",
-
-        #----- Rule count_smRNAs outputs
+        #----- Rule count_smRNAs outputs (includes read length distribution)
         "03_Raw_Quant/raw_amino_counts_by_group.txt",
         "03_Raw_Quant/raw_anticodon_counts_by_sample.txt",
         expand("03_Raw_Quant/other_smRNAs/{file}", file=[
@@ -141,6 +135,7 @@ rule all:
 
         #----- Rule get_tRNA_coverage outputs
         "06_Coverages/mature_tRNA_coverages.txt",
+        "06_Coverages/pretRNA_locus_coverages.txt",
 
         #----- Rule plot_counts outputs
         expand("07_Plots/{file}", file=[
@@ -209,24 +204,22 @@ rule trimming:
             -j {resources.cpus} > {log} 
     """
 
-#----- Rule to align samples to tRNA database
-rule tRNA_align:
+#----- Rule 1: align with bowtie2, write name-ordered raw BAM
+rule tRNA_bowtie2:
     input:
         trim_1 = "01_trimming/{sample}.R1.trim.fastq.gz"
     output:
-        srtBam   = "02_tRNA_alignment/{sample}.srt.bam"
-    log:     "02_tRNA_alignment/logs/{sample}.tRNA_align.log"
-    message: "Aligning to tRNA database: {wildcards.sample}"
-    conda: "env_config/clover-bowtie2.yaml"
+        rawBam = temp("02_tRNA_alignment/{sample}.raw.bam")
+    log:     "02_tRNA_alignment/logs/{sample}.bowtie2.log"
+    message: "Bowtie2 alignment: {wildcards.sample}"
+    conda: "env_config/clover-seq.yaml"
     resources: cpus="10", maxtime="6:00:00", mem_mb="60gb"
     params:
-        sample    = lambda wildcards: wildcards.sample,
         bt2_index = config["bt2_index"],
         maxMaps   = config["maxMaps"],
         nPenalty  = config["nPenalty"]
     shell: """
 
-        #----- Run Bowtie2 alignment (bowtie2 stats → alignLog, pipeline stderr → log)
         bowtie2 \
             --local \
             -x {params.bt2_index} \
@@ -235,71 +228,55 @@ rule tRNA_align:
             --very-sensitive \
             --np {params.nPenalty} \
             --ignore-quals \
+            --reorder \
             -p {resources.cpus} \
-            -S 02_tRNA_alignment/{params.sample}.aln.sam 2> {log}
-
-        #----- Convert SAM to BAM
-        samtools view -bS 02_tRNA_alignment/{params.sample}.aln.sam > 02_tRNA_alignment/{params.sample}.bam
-
-        #----- Sort and index
-        samtools sort -@ 4 02_tRNA_alignment/{params.sample}.bam > {output.srtBam}
-        samtools index {output.srtBam}
-
-        #----- Remove temp files
-        rm -rf 02_tRNA_alignment/{params.sample}.aln.sam
-        rm -rf 02_tRNA_alignment/{params.sample}.bam
+            2> {log} \
+        | samtools view -b -o {output.rawBam} -
 
     """
 
-#----- Rule to mark duplicates
-rule tRNA_mark_duplicates:
+#----- Rule 2: select best tRNA mappings, coordinate-sort, index
+rule tRNA_choosemappings:
     input:
-        bam = "02_tRNA_alignment/{sample}.srt.bam"
+        rawBam = "02_tRNA_alignment/{sample}.raw.bam"
     output:
-        mkdup    = "02_tRNA_alignment/duplicates/{sample}.mkdup.bam",
-        mkdupLog = "02_tRNA_alignment/duplicates/{sample}.mkdup.log.txt"
-    log:     "02_tRNA_alignment/logs/{sample}.picard.log"
-    message: "Marking duplicates: {wildcards.sample}"
-    conda: "env_config/Picard.yaml"
-    resources: cpus="12", maxtime="6:00:00", mem_mb="100gb"
+        srtBam = "02_tRNA_alignment/{sample}.srt.bam"
+    log:     "02_tRNA_alignment/logs/{sample}.choosemappings.log"
+    message: "Selecting best tRNA mappings: {wildcards.sample}"
+    conda: "env_config/clover-seq.yaml"
+    resources: cpus="10", maxtime="6:00:00", mem_mb="60gb"
     params:
-        sample = lambda wildcards: wildcards.sample
+        sample  = lambda wildcards: wildcards.sample,
+        tRNA_db = config["trna_db"]
     shell: """
 
-        #----- Run Picard MarkDuplicates
-        picard -Xmx16G -Xms16G \
-            MarkDuplicates \
-            I={input.bam} \
-            O={output.mkdup} \
-            M={output.mkdupLog} \
-            OPTICAL_DUPLICATE_PIXEL_DISTANCE=100 \
-            CREATE_INDEX=false \
-            MAX_RECORDS_IN_RAM=4000000 \
-            ASSUME_SORTED=true \
-            MAX_FILE_HANDLES=768 2> {log}
+        python code/choosemappings.py {params.tRNA_db}/db-trnatable.txt \
+            --input {input.rawBam} \
+            --progname TRAX \
+            --fqname {params.sample} \
+            --expname {params.sample} \
+            --minnontrnasize 20 \
+            2> {log} \
+        | samtools sort -@ {resources.cpus} -o {output.srtBam} -
 
-        #----- Index the deduped BAM
-        samtools index {output.mkdup}
+        samtools index {output.srtBam}
 
     """
 
 #----- Rule to collate tRNA mapping statistics
 rule tRNA_map_stats:
     input:
-        mkdup = "02_tRNA_alignment/duplicates/{sample}.mkdup.bam"
+        bam = "02_tRNA_alignment/{sample}.srt.bam"
     output:
-        idxStats  = "02_tRNA_alignment/stats/{sample}.mkdup.bam.idxstats",
-        flagStats = "02_tRNA_alignment/stats/{sample}.mkdup.bam.flagstat"
+        idxStats  = "02_tRNA_alignment/stats/{sample}.srt.bam.idxstats",
+        flagStats = "02_tRNA_alignment/stats/{sample}.srt.bam.flagstat"
     message: "Collecting alignment statistics: {wildcards.sample}"
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
-    params:
-        sample = lambda wildcards: wildcards.sample
+    resources: cpus="4", maxtime="1:00:00", mem_mb="16gb"
     shell: """
 
-        #----- Collect alignment metrics
-        samtools idxstats {input.mkdup} > {output.idxStats}
-        samtools flagstat {input.mkdup} > {output.flagStats}
+        samtools idxstats {input.bam} > {output.idxStats}
+        samtools flagstat {input.bam} > {output.flagStats}
 
     """
 
@@ -312,7 +289,8 @@ rule tRNA_count:
         tRNA_isotype_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
         trnaCountsDetailed  = "03_Raw_Quant/tRNA_counts/gene_level_counts_detailed.txt",
         trnaCountsCollapsed = "03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt",
-        trnaEnds            = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt"
+        trnaEnds            = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
+        trnaUniqueCounts    = "03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt"
     message: "Counting tRNA reads across all samples"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="10", maxtime="2:00:00", mem_mb="60gb"
@@ -329,10 +307,13 @@ rule tRNA_count:
             --trnaloci={params.trna_db}/db-trnaloci.bed \
             --maturetrnas={params.trna_db}/db-maturetRNAs.bed \
             --trnatable={params.trna_db}/db-trnatable.txt \
+            --removepseudo \
             --genetypefile={output.genetypeFile} \
+            --countfile={output.trnaCountsDetailed} \
             --trnaends={output.trnaEnds} \
             --trnacounts={output.tRNA_isotype_counts} \
-            --cores={resources.cpus} > {output.trnaCountsDetailed}
+            --trnauniquecounts={output.trnaUniqueCounts} \
+            --cores={resources.cpus}
 
         #----- Collapse detailed tRNA counts to isotype-level counts
         awk '
@@ -364,39 +345,12 @@ rule tRNA_count:
         ' {output.trnaCountsDetailed} > {output.trnaCountsCollapsed}
     """
 
-#----- Rule to plot read-length distributions for all aligned reads
-rule read_length_distribution:
-    input:
-        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
-    output:
-        distribution = "02_tRNA_alignment/full_alignment_read_length_distribution.txt"
-    message: "Calculating read length distributions"
-    conda: "env_config/clover-seq.yaml"
-    resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
-    shell: """
-
-        #----- Calculate read length distribution
-        echo -e "Length\tSample\tCount" > {output.distribution}
-
-        for bam in {input}; do
-            sample=$(basename "$bam" .mkdup.bam)
-            samtools view "$bam" | \
-                awk -v sample="$sample" '{{
-                    len = length($10)
-                    counts[len]++
-                }}
-                END {{
-                    for (i = 0; i <= 100; i++) {{
-                        printf "%d\t%s\t%d\\n", i, sample, counts[i]+0
-                    }}
-                }}' >> {output.distribution}
-        done
-    """
-
-#----- Rule to count other smRNAs
+#----- Rule to count read types (smRNAs, amino acids, anticodons) — runs after normalization
+#      to use size factors, matching processsamples.py counttypes order
 rule count_smRNAs:
     input:
-        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
+        bams        = expand("02_tRNA_alignment/{sample}.srt.bam", sample=sample_list),
+        sizefactors = "04_Expression/gene_level_counts_size_factors.csv"
     output:
         aminoCounts     = "03_Raw_Quant/raw_amino_counts_by_group.txt",
         anticodonCounts = "03_Raw_Quant/raw_anticodon_counts_by_sample.txt",
@@ -413,9 +367,10 @@ rule count_smRNAs:
         trna_db     = config["trna_db"]
     shell: """
 
-        #----- Count all tRNA + smRNA
+        #----- Count all tRNA + smRNA (size-factor normalised, matching tRAX counttypes)
         python {params.smRNA_count} \
             --samplefile={params.runFile} \
+            --sizefactors={input.sizefactors} \
             --trnatable={params.trna_db}/db-trnatable.txt \
             --ensemblgtf={params.trna_db}/genes.gtf \
             --trnaloci={params.trna_db}/db-trnaloci.bed \
@@ -425,7 +380,8 @@ rule count_smRNAs:
             --realcountfile={output.counts} \
             --countfile={output.groupCounts} \
             --mismatchfile={output.subGroupFile} \
-            --trnaanticodonfile={output.anticodonCounts}
+            --trnaanticodonfile={output.anticodonCounts} \
+            --cores={resources.cpus}
 
     """
 
@@ -464,12 +420,13 @@ rule normalize_and_PCA:
             {params.refLevel}
     """
 
-#----- Rule to get tRNA coverages
+#----- Rule to get tRNA coverages (mature + pre-tRNA locus), matching processsamples.py gettrnacoverage
 rule get_tRNA_coverage:
     input:
         sizeFactors = "04_Expression/gene_level_counts_size_factors.csv"
     output:
-        coverages = "06_Coverages/mature_tRNA_coverages.txt"
+        coverages     = "06_Coverages/mature_tRNA_coverages.txt",
+        lociCoverages = "06_Coverages/pretRNA_locus_coverages.txt"
     message: "Calculating tRNA coverages"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -479,24 +436,21 @@ rule get_tRNA_coverage:
         trna_db      = config["trna_db"]
     shell: """
 
-        #----- Run coverage calculation
+        #----- Run coverage calculation (testmain mode via --trnafasta)
         python {params.coverageCode} \
             --bedfile={params.trna_db}/db-maturetRNAs.bed \
+            --locibed={params.trna_db}/db-trnaloci.bed \
             --samplefile={params.runFile} \
             --stkfile={params.trna_db}/db-trnaalign.stk \
-            --sizefactors={input.sizeFactors} > coverage.tmp.txt
-
-        awk 'NR==1 {{
-            for (i = 1; i <= NF; i++) {{
-                if ($i ~ /\.gap/ || $i == "-1") skip[i] = 1;
-                else keep[++n] = i;
-            }}
-        }}
-        {{
-            for (i = 1; i <= n; i++) {{
-                printf "%s%s", $(keep[i]), (i < n ? OFS : ORS);
-            }}
-        }}' OFS="\t" coverage.tmp.txt > {output.coverages}
+            --locistk={params.trna_db}/db-trnaloci.stk \
+            --trnafasta={params.trna_db}/db-maturetRNAs.fa \
+            --numfile={params.trna_db}/db-alignnum.txt \
+            --locinums={params.trna_db}/db-locusnum.txt \
+            --sizefactors={input.sizeFactors} \
+            --allcoverage={output.coverages} \
+            --locicoverage={output.lociCoverages} \
+            --lociedgemargin=30 \
+            --cores={resources.cpus}
     """
 
 #----- Rule to detect mismatches for mature tRNAs
