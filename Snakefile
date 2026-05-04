@@ -306,7 +306,7 @@ rule tRNA_map_stats:
 #----- Rule to count tRNAs
 rule tRNA_count:
     input:
-        expand("02_tRNA_alignment/duplicates/{sample}.mkdup.bam", sample=sample_list)
+        expand("02_tRNA_alignment/{sample}.srt.bam", sample=sample_list)
     output:
         genetypeFile        = "03_Raw_Quant/tRNA_counts/genetype_counts.txt",
         tRNA_isotype_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
