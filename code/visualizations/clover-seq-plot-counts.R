@@ -102,8 +102,8 @@ meta$Group <- relevel(meta$Group, ref = refLevel)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # READ IN THE DATA - tRNA ISOTYPE COUNTS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#trna <- read.csv(paste0(normalizeDir, "normalized_tRNA_isotype_counts.csv"), sep = ",")
-trna <- read_file_safe(paste0(normalizeDir, "normalized_tRNA_isotype_counts.csv"), sep = ",")
+#trna <- read.csv(paste0(normalizeDir, "normalized_unique_tRNAs_counts.csv"), sep = ",")
+trna <- read_file_safe(paste0(normalizeDir, "normalized_unique_tRNAs_counts.csv"), sep = ",")
 rownames(trna) <- trna[,1]
 colnames(trna)[1] <- c("tRNA")
 
@@ -163,8 +163,8 @@ isotype_plot <- ggplot2::ggplot(plot_data, aes(x = Sample, y = Count, fill = Sam
     y = "Count",
     color = "Isoacceptor",
     fill = "Sample")
-ggplot2::ggsave(paste0(opDir, "Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png"), isotype_plot, width = 14, height = 12)
-message("\tPlotted Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png\n")
+ggplot2::ggsave(paste0(opDir, "Grouped_boxplot_norm_unique_tRNAss_by_Sample_and_Anticodon.png"), isotype_plot, width = 14, height = 12)
+message("\tPlotted Grouped_boxplot_norm_unique_tRNAss_by_Sample_and_Anticodon.png\n")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # NORMALIZED COUNTS ABSOLUTE ABUNDANCES
@@ -266,8 +266,8 @@ message("\tPlotted CCA_ends_Relative_Abundances.png\n")
 message("--------------------------------------------------")
 
 #----- Read in size factors
-message("Calculating normalization using 04_Expression/tRNA_isotype_counts_size_factors.csv\n")
-trna_sf <- read.table(paste0(normalizeDir, "tRNA_isotype_counts_size_factors.csv"),
+message("Calculating normalization using 04_Expression/unique_tRNAs_counts_size_factors.csv\n")
+trna_sf <- read.table(paste0(normalizeDir, "unique_tRNAs_counts_size_factors.csv"),
                       sep = "",
                       header = TRUE,
                       check.names = FALSE,

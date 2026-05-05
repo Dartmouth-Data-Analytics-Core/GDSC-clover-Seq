@@ -534,7 +534,7 @@ rule generate_mqc_content:
         gene_level_counts    = "03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt",
         ends_counts          = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
         biotype_counts       = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt",
-        choosemapping_logs   = expand("02_tRNA_alignment/{sample}.choosemappings.log", sample=sample_list)
+        choosemapping_logs   = expand("02_tRNA_alignment/logs/{sample}.choosemappings.log", sample=sample_list)
     output:
         isotype        = "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
         cca            = "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
@@ -551,7 +551,7 @@ rule generate_mqc_content:
             --gene-level-counts {input.gene_level_counts} \
             --ends-counts       {input.ends_counts} \
             --biotype-counts    {input.biotype_counts} \
-            --log-dir           02_tRNA_alignment \
+            --log-dir           02_tRNA_alignment/logs \
             --output-dir        08_QC/mqc_custom_content
 
     """
