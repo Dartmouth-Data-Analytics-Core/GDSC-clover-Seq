@@ -10,6 +10,7 @@ All outputs are aggregated into an interactive MultiQC report. Testing was perfo
 
 ## Documentation
 - [Installation](#installation)
+- [Quick Start](#quick-start)
 - [Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)  
 - [Optional Database Building](docs/database.md)  
 - [Submitting the Pipeline](docs/submitting.md)  
@@ -31,6 +32,34 @@ cd GDSC-clover-Seq
 ```
 
 Comprehensive documentation can be obtained at the links above in the Table of Contents.
+
+## Quick Start
+
+**STEP 1:** Make a folder for environments (this only needs to be done once)
+
+```bash
+mkdir clover-seq-envs/
+```
+
+**STEP 2:** Move your data into the pipeline folder
+
+```bash
+mv <path/to/data> GDSC-clover-Seq
+```
+
+**STEP 3**: Configure Run
+
+- Ensure Sample_list_SE.txt is correct
+- Edit `prebuilt_config/hg38` to use correct reference level
+- Edit `job.script.sh` to point to correct config (one of `hg38`, `dm6`, or `mm10`
+- Edit `job.script.sh` to point to conda prefix (the path you created in step 1)
+- Edit `job.script.sh` to use your Dartmouth email in the SBATCH header
+
+**STEP 4:** Submit the job
+
+```bash
+sbatch job.script.sh
+```
 
 
 ## Contact
