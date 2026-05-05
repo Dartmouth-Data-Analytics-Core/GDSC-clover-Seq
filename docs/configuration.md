@@ -20,6 +20,10 @@ These correspond to 3 prebuilt configs, located in the `prebuilt_configs` folder
 - genome
 - refLevel
 
+## Prebuilt Software Environments
+
+The `job.script.sh` contains a `conda prefix` argument that points to pre-built environments hosted by the GDSC. It is recommended to point this to a folder you create. The first time you run the pipeline, the environments will build to this location and be accessible every time afterwards.
+
 
 ### General settings
 
@@ -106,13 +110,14 @@ shArg2,data/shArg_2_R1.fastq.gz,shArg
 shArg3,data/shArg_3_R1.fastq.gz,shArg
 ```
 
-!!! warning "Header names are required"
-    Do **not** rename the header columns (`Sample_ID`, `fastq_1`, `Group`). Only edit the data rows.
+> ⚠️ **Header names are required**
+> Do **not** rename the header columns (`Sample_ID`, `fastq_1`, `Group`). Only edit the data rows.
 
-!!! tip "Group labels and refLevel"
-    The `refLevel` in your config must exactly match one of the values in the `Group` column. In the example above, `refLevel: "shGFP"` is correct.
+> ⚠️ **Group labels and refLevel**
+> The `refLevel` in your config must exactly match one of the values in the `Group` column.
 
 ---
+
 
 ## Cluster Profile
 
