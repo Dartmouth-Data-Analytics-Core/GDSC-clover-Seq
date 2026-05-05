@@ -714,7 +714,7 @@ def testmain(**argdict):
     if "orgtype" in argdict:
         orgtype = argdict["orgtype"]
         
-    locistk = readrnastk(argdict["locistk"])
+    locistk = list(readrnastk(open(argdict["locistk"], "r")))[0]
     sizefactor = defaultdict(lambda: 1)
     if argdict["sizefactors"]:
         sizefactor = getsizefactors(argdict["sizefactors"]) 
