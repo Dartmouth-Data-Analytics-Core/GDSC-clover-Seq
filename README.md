@@ -1,6 +1,6 @@
 
 # Dartmouth GDSC Clover-Seq Pipeline
-![Version](https://img.shields.io/badge/version-3.1-blue)
+![Version](https://img.shields.io/badge/version-3.1.1-blue)
 
 GDSC-Clover-Seq is a Snakemake pipeline for the comprehensive quantitative analysis of tRNA-seq libraries, developed by the Dartmouth Genomic Data Science Core (GDSC). It is adapted from the tRAX framework (Holmes et al., 2022; doi: 10.1101/2022.07.02.498565) and reimplemented as a reproducible, HPC-compatible workflow with per-rule conda environments and SLURM resource management.
 
