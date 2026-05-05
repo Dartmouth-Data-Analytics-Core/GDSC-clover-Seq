@@ -1,5 +1,5 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# Clover-Seq version 3.1.1
+# Clover-Seq version 3.1.2
 # This code was modified from tRAX (doi: 10.1101/2022.07.02.498565)
 # and adapted for use on Dartmouth HPC via Snakemake.
 # tRNA databases are built and hosted by the Dartmouth 
