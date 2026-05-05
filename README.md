@@ -1,18 +1,19 @@
 
 # Dartmouth GDSC Clover-Seq Pipeline
-![Version](https://img.shields.io/badge/version-2.0-blue)
+![Version](https://img.shields.io/badge/version-3.1-blue)
 
-This pipeline provides preprocessing and quality control of tRNA sequencing data. This pipeline has been built and tested using human, mouse, and fly data sets. Major steps of this pipeline include: 
+GDSC-Clover-Seq is a Snakemake pipeline for the comprehensive quantitative analysis of tRNA-seq libraries, developed by the Dartmouth Genomic Data Science Core (GDSC). It is adapted from the tRAX framework (Holmes et al., 2022; doi: 10.1101/2022.07.02.498565) and reimplemented as a reproducible, HPC-compatible workflow with per-rule conda environments and SLURM resource management.
 
-- Trimming of adapters using [*Cutadapt*](https://cutadapt.readthedocs.io/en/stable/)
-- Alignment to custom tRNA databases (mature and pre-tRNA loci) using [*bowtie2*](https://github.com/BenLangmead/bowtie2)
-- Quantification of mature tRNA and tRNA isotype sequences using custom code
-- Mismatch and coverage analyses
-- Quality Control and differential expression analyses using [DESeq2](https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html)
+The pipeline takes adapter-trimmed short reads and produces a complete tRNA expression atlas. Reads are aligned to a Bowtie2 reference containing mature tRNA sequences downloaded from GtRNADB and the full genome sequence, allowing simultaneous quantification of mature tRNAs and their pre-tRNA precursors. Multi-mapping (common in tRNA-seq because many tRNA gene families share near-identical sequences) is resolved by retaining only the highest-scoring alignment(s) per read. Downstream counting distinguishes uniquely-mapped reads from multi-mapper-resolved reads, and both are carried through parallel DESeq2 differential expression analyses. Per-position coverage and mismatch profiles are computed using the Sprinzl canonical numbering system, enabling comparison of structural positions across tRNAs of different lengths and identification of modification-induced reverse transcriptase stops. CCA tail integrity is quantified as a proxy for tRNA maturation and aminoacylation status.
+
+All outputs are aggregated into an interactive MultiQC report. Testing was performed on human datasets, but prebuilt databases are hosted through the GDSC for human, fly, and mouse.
 
 ## Documentation
 - [Installation](#installation)
-- [Comprehensive Documentation](#comprehensive-documentation)
+- [Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)  
+- [Optional Database Building](docs/database.md)  
+- [Submitting the Pipeline](docs/submitting.md)  
+- [Understanding the Outputs](docs/Understanding_the_Outputs.md)  
 - [Contact](#contact)
 - [Citation and Licensing](#citation-and-licensing)
 
@@ -29,16 +30,8 @@ cd GDSC-clover-Seq
 
 ```
 
-Several [conda environments](https://anaconda.org/anaconda/conda) are required to run this code successfully. For your convenience, these conda environments have been prebuilt and are hosted publically by the Dartmouth Genomic Data Science Core through the conda-prefix argument in the `job.script.sh`.
+Comprehensive documentation can be obtained at the links above in the Table of Contents.
 
-## Comprehensive Documentation
-
-For extended information on how to configure a job and submit it on the [Dartmouth high-performance compute cluster, Discovery](https://rc.dartmouth.edu/hpc/discovery-overview/) see the links below:
-
-[Configuring a GDSC-Clover-Seq pipeline run](docs/configuration.md)  
-[Optional Database Building](docs/database.md)  
-[Submitting the Pipeline](docs/submitting.md)  
-[Understanding the Outputs](docs/Understanding_the_Outputs.md)  
 
 ## Contact
 Please address questions to **DataAnalyticsCore@groups.dartmouth.edu** or submit an issue in the GitHub repository.
