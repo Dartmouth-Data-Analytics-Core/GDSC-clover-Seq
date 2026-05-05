@@ -151,7 +151,7 @@ rule all:
     output:
         "08_QC/tRNA_multi_QC_report.html"
     message: "Generating MultiQC report"
-    conda: "env_config/clover-seq.yaml"
+    conda: "env_config/multiqc.yaml"
     resources: cpus="10", maxtime="2:00:00", mem_mb="60gb"
     params:
         genome = config["genome"]
