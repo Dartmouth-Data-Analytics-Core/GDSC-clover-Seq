@@ -12,5 +12,9 @@ slurm_logs/*
 *.out 
 data/*
 coverage.tmp.txt
+Sample_list_SE.txt_old
 Rplots.pdf
 runfile.txt
+tRAX/*
+TRAC-Seq/*
+OLD_aln/*

@@ -556,6 +556,8 @@ if __name__ == "__main__":
                        help='Output file for tRNA end counts')
     parser.add_argument('--trnauniquecounts', default=None,
                        help='Output file for unique tRNA counts')
+    parser.add_argument('--countfile', default=None,
+                       help='Output file for gene-level read counts (default: stdout)')
     parser.add_argument('--cores', type=int, default=1,
                        help='Number of parallel worker processes (default: 1)')
 
