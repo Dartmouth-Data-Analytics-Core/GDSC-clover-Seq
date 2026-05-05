@@ -87,14 +87,10 @@ positions <- c(
   "49","50","51","52","53","54","55","56","57","58","59","60","61","62","63","64","65","66",
   "67","68","69","70","71","72","73","74","75","76")
 
-#----- Pivot to long format for plotting
-covsLong <- tidyr::pivot_longer(data = covs,
-                                -c(Sample, Feature),
-                                names_to = "Position",
-                                values_to = "normalized_coverage")
-
-#----- Clean the positions and factor
-covsLong$Position <- gsub("^X", "", covsLong$Position)
+#----- File is already long format — select coverage column and rename
+covsLong <- covs[, c("Feature", "Sample", "position", "coverage")]
+colnames(covsLong) <- c("Feature", "Sample", "Position", "normalized_coverage")
+covsLong$Position <- as.character(covsLong$Position)
 covsLong$Position <- factor(covsLong$Position, levels = positions)
 
 #----- Get a vector of unique features to iterate over
