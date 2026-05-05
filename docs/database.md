@@ -1,9 +1,8 @@
 # Database Build Module
 
-!!! note "These rules are optional and toggleable through the config files in `prebuilt_configs/`"
-    Pre-built databases for hg38, mm10, and dm6 are available on Dartmouth HPC at
-    `/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/`.
-    We recommend using these (as they are specified in the config files) unless you need a custom organism or updated annotation.
+> ⚠️ **These rules are optional and toggleable via prebuilt_configs**   
+> Pre-built databases for hg38, mm10, and dm6 are available on Dartmouth HPC at `/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/`.
+> We recommend using these (as they are specified in the config files) unless you need a custom organism or updated annotation. Default behavior of the > pipeline is to run without building a database.
 
 ---
 
