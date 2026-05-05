@@ -285,7 +285,8 @@ if (length(args) == 4) {
   comparisons <- apply(pairreduce, 1, list)
   comparisons <- lapply(comparisons, unlist)
 } else {
-  comparisons <- combn(as.character(unique(meta$Group)), 2, simplify = FALSE)
+  nonRefLevels <- levels(meta$Group)[levels(meta$Group) != refLevel]
+  comparisons  <- lapply(nonRefLevels, function(lvl) c(lvl, refLevel))
 }
 
 message(paste0("Comparisons to run: ", length(comparisons)))
