@@ -51,11 +51,13 @@ module_order:
 
 sp:
   trna_isotype_abundance:
-    fn: "trna_isotype_abundance_mqc.tsv"
+    fn: "unique_tRNAs_abundance_mqc.tsv"
   cca_tail_status:
     fn: "cca_tail_status_mqc.tsv"
   smrna_biotype:
     fn: "smrna_biotype_mqc.tsv"
+  choosemappings_stats:
+    fn: "choosemappings_stats_mqc.tsv"
 
 custom_data:
   trna_isotype_abundance:
@@ -91,3 +93,11 @@ custom_data:
       ylab: 'Read Counts'
       cpswitch: true
       cpswitch_c_active: false
+  choosemappings_stats:
+    file_format: 'tsv'
+    section_name: 'tRNA Mapping Assignment Statistics'
+    description: 'Per-sample summary of tRNA read assignment from choosemappings.py. Multi-transcript/anticodon/amino counts indicate reads mapping equally well to multiple tRNA genes.'
+    plot_type: 'table'
+    pconfig:
+      id: 'choosemappings_stats_table'
+      title: 'tRNA Mapping Statistics'

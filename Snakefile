@@ -150,6 +150,7 @@ rule all:
         "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
         "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
         "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv",
+        "08_QC/mqc_custom_content/choosemappings_stats_mqc.tsv",
 
         #----- Database build outputs (only when build_database: true)
         db_build_outputs
@@ -530,13 +531,15 @@ rule plot_counts:
 #----- Rule to generate MultiQC custom content files
 rule generate_mqc_content:
     input:
-        gene_level_counts = "03_Raw_Quant/tRNA_counts/unique_tRNAs_counts.txt",
-        ends_counts       = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
-        biotype_counts    = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt"
+        gene_level_counts    = "03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt",
+        ends_counts          = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
+        biotype_counts       = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt",
+        choosemapping_logs   = expand("02_tRNA_alignment/{sample}.choosemappings.log", sample=sample_list)
     output:
-        isotype = "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
-        cca     = "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
-        biotype = "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv"
+        isotype        = "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
+        cca            = "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
+        biotype        = "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv",
+        choosemappings = "08_QC/mqc_custom_content/choosemappings_stats_mqc.tsv"
     message: "Generating MultiQC custom content"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="1", maxtime="0:30:00", mem_mb="8gb"
@@ -548,6 +551,7 @@ rule generate_mqc_content:
             --gene-level-counts {input.gene_level_counts} \
             --ends-counts       {input.ends_counts} \
             --biotype-counts    {input.biotype_counts} \
+            --log-dir           02_tRNA_alignment \
             --output-dir        08_QC/mqc_custom_content
 
     """
