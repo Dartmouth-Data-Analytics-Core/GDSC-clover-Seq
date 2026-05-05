@@ -8,7 +8,7 @@ import re
 import gzip
 import subprocess
 import os.path
-from distutils.spawn import find_executable
+from shutil import which as find_executable
 
 from collections import defaultdict
 
