@@ -1,5 +1,5 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# Clover-Seq version 3.0
+# Clover-Seq version 3.1
 # This code was modified from tRAX (doi: 10.1101/2022.07.02.498565)
 # and adapted for use on Dartmouth HPC via Snakemake.
 # tRNA databases are built and hosted by the Dartmouth 
@@ -12,13 +12,6 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # SET GLOBAL SCOPE PYTHON VARIABLES (EXECUTED BEFORE SNAKEMAKE)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# TO DO
-# - Optimize count_all_smRNA.py
-# - Optimize getCoverage.py
-# - Optimize getMismatches.py
-# - Make sure DESeq2 script is outputting png and not pdf
-# - Custom MultiQC reporting and branding
-# - Change clusterProfile and job script back to use standard partition
 
 import pandas as pd
 import csv

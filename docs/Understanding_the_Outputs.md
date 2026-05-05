@@ -1,402 +1,159 @@
 # Understanding the Outputs
 
-This document describes every output file produced by the Clover-Seq Snakemake pipeline, grouped by output directory. For each file, the rule that produced it, the file format, and the meaning of its contents are described.
-
----
-
-## Directory Structure Overview
+Clover-Seq v3.0 is a Snakemake pipeline adapted from tRAX (doi: 10.1101/2022.07.02.498565) for tRNA-seq analysis on Dartmouth HPC. This document describes every output file, organized by analysis stage.
 
 ```
-01_trimming/          Adapter-trimmed reads
-02_tRNA_alignment/    Aligned BAMs, duplicate marking, alignment stats
-03_Raw_Quant/         Raw read counts for tRNA and all small RNA biotypes
-04_Expression/        DESeq2-normalized counts and serialized R objects
-05_Mismatches/        Per-position mismatch profiles and heatmaps
-06_Coverages/         Per-position read coverage across mature tRNAs
-07_Plots/             Publication-ready figures
-08_QC/                Aggregated MultiQC quality report
+01_trimming/              Adapter-trimmed reads and trimming logs
+02_tRNA_alignment/        Aligned BAMs, mapping logs, alignment statistics
+03_Raw_Quant/             Raw read counts — tRNA-specific and all small RNA biotypes
+04_Expression/            DESeq2 size factors, normalized counts, DE results, R objects
+05_Mismatches/            Per-position mismatch profiles and heatmaps
+06_Coverages/             Per-position read coverage across tRNAs and pre-tRNA loci
+07_Plots/                 Figures — PCA, isoacceptor counts, CCA ends, coverage
+08_QC/                    MultiQC custom content and aggregated HTML report
 ```
 
 ---
 
-## 01_trimming/
+## Read Trimming
 
-### `01_trimming/{sample}.R1.trim.fastq.gz`
-**Rule:** `trimming`
+Adapters are removed with cutadapt. Reads shorter than the configured `minlength` are discarded. Only the trimmed reads proceed to alignment.
 
-Adapter-trimmed reads for each sample, produced by cutadapt. Reads shorter than the configured minimum length (`minlength`) are discarded. This file is the input to alignment and is not typically used directly for downstream analysis.
-
-**Quality check:** Trimming statistics (adapter content, reads passing filter, length distribution) are in `01_trimming/logs/{sample}.cutadapt.log` and are included in the MultiQC report.
-
----
-
-## 02_tRNA_alignment/
-
-### `02_tRNA_alignment/{sample}.srt.bam`
-**Rule:** `tRNA_align`
-
-Sorted, indexed BAM file for each sample aligned to the tRNA genome database using Bowtie2 (`--local --very-sensitive`). The database contains both mature tRNA chromosomes and genomic pre-tRNA loci, allowing reads to be assigned to either. Multi-mapping is permitted up to the `maxMaps` limit configured in the run config.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `01_trimming/{sample}.R1.trim.fastq.gz` | `trimming` | Adapter-trimmed reads for each sample |
+| `01_trimming/logs/{sample}.cutadapt.log` | `trimming` | Trimming stats — adapter content, reads passing filter, length distribution; parsed by MultiQC |
 
 ---
 
-### `02_tRNA_alignment/duplicates/{sample}.mkdup.bam`
-**Rule:** `tRNA_mark_duplicates`
+## tRNA Alignment
 
-Duplicate-marked BAM produced by Picard MarkDuplicates. Duplicate reads are flagged in the BAM flag field but **not** removed — all downstream counting scripts see every read, including duplicates. This is intentional for Clover-Seq, where optical duplicates are low and PCR amplification bias is tracked separately.
+Reads are aligned to a combined reference containing both mature tRNA sequences (with 3′ CCA tails) and the full genomic sequence, using Bowtie2 in local mode (`--very-sensitive -k 100`). Multi-mappers are resolved by `choosemappings.py`, which retains only the highest-scoring alignment(s) and classifies each read as tRNA or non-tRNA. The raw bowtie2 BAM is a temporary file and is deleted after `choosemappings.py` completes.
 
-### `02_tRNA_alignment/duplicates/{sample}.mkdup.log.txt`
-**Rule:** `tRNA_mark_duplicates`
-
-Picard metrics file reporting the number of reads examined, duplicates identified, and estimated library size. Included in the MultiQC report.
-
----
-
-### `02_tRNA_alignment/stats/{sample}.mkdup.bam.idxstats`
-**Rule:** `tRNA_map_stats`
-
-Tab-delimited file from `samtools idxstats`. Each row is one reference sequence (chromosome) in the database. Columns:
-
-| Column | Description |
-|--------|-------------|
-| Reference | Chromosome/tRNA name (e.g., `tRNA-Val-AAC-5-1`) |
-| Length | Reference sequence length (bp) |
-| Mapped | Reads mapped to this reference |
-| Unmapped | Reads with this reference but unmapped flag |
-
-Useful for checking which tRNAs captured the most reads at the individual-chromosome level.
-
-### `02_tRNA_alignment/stats/{sample}.mkdup.bam.flagstat`
-**Rule:** `tRNA_map_stats`
-
-Summary alignment statistics from `samtools flagstat`: total reads, mapped reads, duplicates, paired-end flags. Included in the MultiQC report.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `02_tRNA_alignment/{sample}.srt.bam` | `tRNA_choosemappings` | Sorted, indexed BAM with best-hit multi-mapper selection applied; input to all downstream counting and coverage rules |
+| `02_tRNA_alignment/{sample}.raw.bam` | `tRNA_bowtie2` | Raw bowtie2 output before multi-mapper filtering; temporary file, deleted on completion |
+| `02_tRNA_alignment/logs/{sample}.bowtie2.log` | `tRNA_bowtie2` | Bowtie2 alignment summary — overall alignment rate, uniquely/multi-mapped read counts; parsed by MultiQC |
+| `02_tRNA_alignment/logs/{sample}.choosemappings.log` | `tRNA_choosemappings` | tRNA read assignment stats — total tRNA reads, multi-transcript/anticodon/amino ambiguity counts, non-tRNA reads, imperfect matches; parsed into the MultiQC report as a table |
+| `02_tRNA_alignment/stats/{sample}.srt.bam.idxstats` | `tRNA_map_stats` | Per-reference sequence read counts from `samtools idxstats`; columns: reference name, length, mapped reads, unmapped reads |
+| `02_tRNA_alignment/stats/{sample}.srt.bam.flagstat` | `tRNA_map_stats` | Summary alignment flags from `samtools flagstat` — total, mapped, duplicate read counts; parsed by MultiQC |
 
 ---
 
-### `02_tRNA_alignment/full_alignment_read_length_distribution.txt`
-**Rule:** `read_length_distribution`
+## tRNA Read Counting
 
-Tab-delimited table of read-length counts across all samples. All aligned reads (not classified by RNA type) are counted. Lengths 0–100 are reported for every sample.
+All tRNA count files are produced in a single run of `countreads.py`. The pipeline counts reads at multiple levels of resolution: per genomic locus, per mature tRNA gene, and broken out by fragment type. Only features with at least 5 reads in any sample are reported.
 
-| Column | Description |
-|--------|-------------|
-| Length | Read length (nt) |
-| Sample | Sample ID |
-| Count | Number of reads at this length in this sample |
+The key distinction between count files is what reads they include and how granularly they report them:
 
-This reflects the full complexity of the small RNA landscape before biotype classification. tRNA-derived reads typically peak at 18–22 nt and 30–36 nt (mature tRNA length).
+- **Unique counts** include only reads that mapped unambiguously to a single tRNA gene (no equal-scoring alternative alignments). These are the most conservative counts and are used as the primary DESeq2 input.
+- **Total counts** (isotype file) include all reads assigned to each tRNA — both uniquely mapping and multi-mapping reads that were resolved by `choosemappings.py` to their best-scoring tRNA hit. This is the more sensitive count, equivalent to the primary count used in the original tRAX pipeline.
+- **Detailed counts** break every gene into five fragment-type rows. These are not used for DESeq2 directly but are useful for inspecting the composition of reads (e.g., whether signal comes from tRNA halves vs. full-length reads).
 
----
-
-## 03_Raw_Quant/tRNA_counts/
-
-These five files are all produced by a single run of `rule tRNA_count` (`countreads.py`).
-
-### `03_Raw_Quant/tRNA_counts/genetype_counts.txt`
-**Rule:** `tRNA_count` → `countreads.py` (`printtypefile`)
-
-Tab-delimited gene-to-biotype mapping table. Each row describes one feature row that appears in the count files. This file is used by DESeq2 to assign biotype labels for size-factor calculation and differential expression.
-
-| Column | Description |
-|--------|-------------|
-| Gene name | Feature identifier (e.g., `tRNA-Val-AAC-5-1_wholecounts`) |
-| Biotype | Feature type (e.g., `tRNA`, `tRNA_locus`, `protein_coding`) |
-| Chromosome | Chromosome the feature comes from; `tRNA` for mature tRNAs |
-| Mean read length | Average length of reads mapping to this feature across all samples |
+| Output | Rule | Contents |
+|--------|------|----------|
+| `03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt` | `tRNA_count` | One row per tRNA gene; counts reads that mapped unambiguously to that gene only (YR tag = 1). Primary input to DESeq2 normalization and differential expression. |
+| `03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt` | `tRNA_count` | One row per mature tRNA gene and per pre-tRNA locus; total reads including resolved multi-mappers. Pre-tRNA loci appear first, then mature tRNAs. Input to the tRNA isotype DESeq2 analysis. |
+| `03_Raw_Quant/tRNA_counts/gene_level_counts_detailed.txt` | `tRNA_count` | Five rows per tRNA gene (fragment types: `_wholecounts`, `_fiveprime`, `_threeprime`, `_other`, `_antisense`). Pre-tRNA loci have `_wholeprecounts`, `_partialprecounts`, `_trailercounts`. Use this to inspect whether tRNA signal comes from full-length reads or tRNA-derived fragments (tDRs). |
+| `03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt` | `tRNA_count` | Fragment types summed to one row per tRNA gene (all reads, not fragment-specific). Produced by awk collapsing of the detailed file. |
+| `03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt` | `tRNA_count` | CCA tail completeness per tRNA per sample. Rows are `{gene}\t{end_type}` pairs. End types: `CCA` (intact mature 3′ end), `CC`, `C` (partially trimmed), `Trimmed` (3+ nt removed or aminoacylated). |
+| `03_Raw_Quant/tRNA_counts/genetype_counts.txt` | `tRNA_count` | Gene-to-biotype mapping table used by DESeq2. Columns: feature name, biotype, chromosome, mean read length. |
 
 ---
 
-### `03_Raw_Quant/tRNA_counts/gene_level_counts_detailed.txt`
-**Rule:** `tRNA_count` → `countreads.py` (`printcountfile`)
+## Small RNA Counting
 
-Tab-delimited raw count table. Rows are individual tRNA features broken out by fragment type; columns are samples. This is the direct output of `countreads.py` before any collapsing.
+`count_all_smRNA.py` classifies every aligned read into a biotype hierarchy (tRNA > pre-tRNA > Ensembl annotation > other) and reports read length distributions, amino acid and anticodon-level tRNA summaries, and per-sample biotype breakdowns. Size factors from DESeq2 are applied for normalization.
 
-**Fragment type suffixes per tRNA gene:**
-
-| Suffix | Description |
-|--------|-------------|
-| `_wholecounts` | Reads spanning ≥ 90% of the full-length tRNA |
-| `_fiveprime` | 5′ tRNA fragment reads |
-| `_threeprime` | 3′ tRNA fragment reads |
-| `_other` | Reads that do not fit whole/5′/3′ categories |
-| `_antisense` | Reads mapping to the antisense strand |
-
-Pre-tRNA loci also appear with `_wholeprecounts`, `_partialprecounts`, and `_trailercounts` suffixes.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `03_Raw_Quant/raw_amino_counts_by_group.txt` | `count_smRNAs` | Normalized tRNA read counts grouped by amino acid (20 standard + suppressor/unknown), one column per replicate group. Reads are only counted if they map unambiguously to a single amino acid family. |
+| `03_Raw_Quant/raw_anticodon_counts_by_sample.txt` | `count_smRNAs` | Normalized tRNA counts grouped by anticodon (isoacceptor family), one column per sample. More stringent than amino acid counts — a read must map unambiguously to one anticodon to be counted. |
+| `03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_group.txt` | `count_smRNAs` | Normalized biotype read counts per replicate group. Rows are RNA biotype categories in fixed priority order: tRNA, pre-tRNA, then Ensembl biotypes (miRNA, snoRNA, snRNA, rRNA, etc.), then other. |
+| `03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt` | `count_smRNAs` | Same biotype breakdown as above but raw (un-normalized) counts for each individual sample. Use for per-sample QC before normalization. |
+| `03_Raw_Quant/other_smRNAs/read_length_distribution.txt` | `count_smRNAs` | Read length counts (0–100 nt) broken down by biotype class (tRNA, pre-tRNA, other) for each sample. Mature tRNA reads typically peak at 30–36 nt; tDRs at 18–22 nt. |
+| `03_Raw_Quant/other_smRNAs/subroup_counts.txt` | `count_smRNAs` | Mismatch count distribution — how many reads have 0, 1, 2 … mismatches, split by tRNA vs. non-tRNA. Used to assess alignment quality. (Filename contains a historical typo — `subroup` instead of `subgroup`.) |
 
 ---
 
-### `03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt`
-**Rule:** `tRNA_count` → awk in shell
+## Normalization, PCA, and Differential Expression
 
-The detailed count table collapsed to one row per tRNA gene by summing all fragment types for each gene name. Produced by splitting the gene name on `_` and summing all rows sharing the same base name.
+`clover-seq-DESeq2.R` runs two parallel DESeq2 analyses: one on the gene-level counts (all reads, `gene_level_counts_detailed.txt`) and one on uniquely-mapped tRNA counts (`unique_tRNA_counts.txt`). Both follow the tRAX normalization approach: size factors are estimated separately with `estimateSizeFactors()`, normalization is applied as a manual sweep division (not DESeq2's internal normalized count accessor), and dispersion/DE fitting uses `betaPrior=TRUE`.
 
-This is the primary input to DESeq2 normalization (`rule normalize_and_PCA`). Use this file for differential expression analysis at the gene level.
+Differential expression is run for all pairwise group comparisons (or a supplied comparisons file) and outputs padj tables, log2 fold-change tables, group median counts, combined results tables, and volcano plots — one set per comparison, per analysis.
 
----
-
-### `03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt`
-**Rule:** `tRNA_count` → `countreads.py` (`printtrnacountfile`)
-
-Tab-delimited raw count table with one row per mature tRNA gene or pre-tRNA locus, columns are samples. Only features with at least 5 reads in any sample are included. This is the primary input to isotype-level DESeq2 analysis and is the second input to `rule normalize_and_PCA`.
-
-Unlike the detailed file, each row here is a single tRNA identity — no fragment-type breakdown. Pre-tRNA loci (genomic loci) are listed first, followed by mature tRNAs.
-
----
-
-### `03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt`
-**Rule:** `tRNA_count` → `countreads.py` (`printtrnaendfile`)
-
-Tab-delimited CCA-end type count table. Rows are `{tRNA_gene}\t{end_type}` pairs; columns are samples. End types reflect the 3′ trailer composition of each read and are used to assess CCA end integrity as a proxy for tRNA maturation and aminoacylation.
-
-| End type | Meaning |
-|----------|---------|
-| `CCA` | Read ends with full CCA trailer (mature, uncharged) |
-| `CC` | Read ends with CC (missing the terminal A) |
-| `C` | Read ends with only C |
-| `Trimmed` | No CCA trailer (fully trimmed or aminoacylated) |
-
-Only tRNAs with ≥ 5 reads in any sample are included.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `04_Expression/gene_level_counts_size_factors.csv` | `normalize_and_PCA` | DESeq2 size factors for gene-level counts. Two-row format: sample names, then size factor values. Consumed by `get_tRNA_coverage` and `get_mismatches` for coverage normalization. |
+| `04_Expression/normalized_gene_level_counts.csv` | `normalize_and_PCA` | Sweep-normalized gene-level counts (raw counts divided by size factors). Suitable for visualization; not for direct DE statistics. |
+| `04_Expression/gene_level_DESeq2_object.Rds` | `normalize_and_PCA` | Serialized `DESeqDataSet` for gene-level analysis. Load with `readRDS()` to re-run contrasts or extract results without re-running the pipeline. |
+| `04_Expression/unique_tRNAs_counts_size_factors.csv` | `normalize_and_PCA` | DESeq2 size factors for uniquely-mapped tRNA counts. Same format as above. |
+| `04_Expression/normalized_unique_tRNAs_counts.csv` | `normalize_and_PCA` | Sweep-normalized unique tRNA counts. Used by `plot_counts` for isoacceptor visualizations. |
+| `04_Expression/unique_tRNAs_DESeq2_object.Rds` | `normalize_and_PCA` | Serialized `DESeqDataSet` for unique tRNA analysis. |
+| `04_Expression/Differential_Expression/{typename}_{comparison}_volcano.pdf` | `normalize_and_PCA` | Volcano plot per comparison per analysis type (`gene_level` or `unique_tRNAs`). Features with \|log2FC\| > 1.5 and padj below the top-10 threshold are labeled. |
+| `04_Expression/Differential_Expression/{typename}_padjs.txt` | `normalize_and_PCA` | Matrix of adjusted p-values — rows are features, columns are comparisons. |
+| `04_Expression/Differential_Expression/{typename}_logvals.txt` | `normalize_and_PCA` | Matrix of log2 fold-changes — same structure as padjs. |
+| `04_Expression/Differential_Expression/{typename}_medians.txt` | `normalize_and_PCA` | Median normalized counts per group for each feature. |
+| `04_Expression/Differential_Expression/{typename}_combine.txt` | `normalize_and_PCA` | Combined results table: log2FC columns + padj columns + group median columns side-by-side. The primary table for downstream filtering and reporting. |
+| `04_Expression/Differential_Expression/{typename}_dispersions.txt` | `normalize_and_PCA` | DESeq2 dispersion estimates per feature. Useful for diagnosing overdispersion. |
+| `07_Plots/PCA/gene_level_variance_plot.png` | `normalize_and_PCA` | Scree plot — variance explained by each PC at the gene level. |
+| `07_Plots/PCA/gene_level_loadings.csv` | `normalize_and_PCA` | Sample PC coordinates (loadings) for gene-level rlog-transformed data. |
+| `07_Plots/PCA/gene_level_PCA.png` | `normalize_and_PCA` | PCA scatter plot of samples colored by group — gene level. Primary QC figure for batch effects and group separation. |
+| `07_Plots/PCA/unique_tRNAs_variance_plot.png` | `normalize_and_PCA` | Scree plot for uniquely-mapped tRNA PCA. |
+| `07_Plots/PCA/unique_tRNAs_loadings.csv` | `normalize_and_PCA` | Sample PC coordinates for unique tRNA rlog data. |
+| `07_Plots/PCA/unique_tRNAs_PCA.png` | `normalize_and_PCA` | PCA scatter plot — unique tRNA level. |
+| `07_Plots/PCA/PCA_Analysis_Summary.png` | `normalize_and_PCA` | Combined figure showing gene-level and unique tRNA PCAs side-by-side. |
 
 ---
 
-## 03_Raw_Quant/
+## Mismatch Analysis
 
-### `03_Raw_Quant/raw_amino_counts_by_group.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printaminocounts`)
+`getgenomicmismatches.py` computes per-position mismatch and base-composition profiles across all mature tRNAs. Positions with mismatch fraction > 5% in any sample are retained. These profiles reflect tRNA modification sites (e.g., m1A at position 58, which causes reverse transcriptase stops) and can distinguish true modifications from sequencing errors by their consistency across samples.
 
-Tab-delimited table of tRNA counts grouped by amino acid. Rows are the 20 standard amino acids (plus suppressor/unknown classes); columns are replicate groups. Counts are size-factor normalized.
-
-A read is counted toward an amino acid only if it maps uniquely to a single amino acid family — multi-mapping reads that could belong to different amino acid families are excluded. This makes the counts conservative but unambiguous.
-
----
-
-### `03_Raw_Quant/raw_anticodon_counts_by_sample.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printanticodoncounts`)
-
-Tab-delimited table of tRNA counts grouped by anticodon (isoacceptor family). Rows are anticodons; columns are individual samples (not collapsed by replicate). Counts are size-factor normalized.
-
-A read is counted toward an anticodon only if it maps uniquely to a single anticodon — more stringent than the amino acid filter. This is the recommended table for isoacceptor-level analysis.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `05_Mismatches/mature_tRNA_mismatches.txt` | `get_mismatches` | Long-format per-position mismatch table. One row per feature × sample × position. Columns include: normalized coverage, read starts/ends, mismatch and deletion counts, per-nucleotide base counts (A/T/C/G/deletion), and the reference base. |
+| `05_Mismatches/mature_tRNA_mismatches.bed` | `get_mismatches` | BED file of high-mismatch positions (fraction > 5%). One interval per nucleotide position. Score field = mismatch fraction × 1000. |
+| `05_Mismatches/heatmaps/` | `get_mismatches` | One PNG heatmap per amino acid group (e.g., `Ala_heatmap.png`). Color encodes mismatch frequency across tRNA positions (columns) and samples (rows). Consistent high-mismatch sites across samples indicate RNA modifications. |
 
 ---
 
-## 03_Raw_Quant/other_smRNAs/
+## Coverage Analysis
 
-### `03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_group.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printtypefile`)
+`getcoverage.py` computes per-position read depth across mature tRNA sequences and pre-tRNA genomic loci. Positions are mapped to the Sprinzl canonical numbering system via Stockholm alignment, enabling comparison across tRNAs of different lengths — position 34 is always the wobble base, position 58 is the T-loop modification site, etc.
 
-Tab-delimited table of **normalized** biotype read counts per replicate group. Rows are RNA biotype categories; columns are replicate group names. Each read is assigned to exactly one category in priority order (tRNA > pre-tRNA > Ensembl biotype > BED feature > other).
-
-**Row order (fixed):**
-- `other` — reads not assigned to any known category
-- Ensembl biotypes in priority order: `snoRNA`, `snRNA`, `scaRNA`, `sRNA`, `miRNA`, then other biotypes alphabetically, then `Mt_rRNA`, `Mt_tRNA`, `rRNA`
-- `pretRNA_antisense` — antisense reads overlapping pre-tRNA loci
-- `pretRNA` — reads overlapping pre-tRNA genomic loci
-- `tRNA_antisense` — antisense reads on mature tRNA chromosomes
-- `tRNA` — sense reads on mature tRNA chromosomes
+| Output | Rule | Contents |
+|--------|------|----------|
+| `06_Coverages/mature_tRNA_coverages.txt` | `get_tRNA_coverage` | Long-format coverage table for mature tRNAs. One row per feature × sample × Sprinzl position. Columns: Feature, Sample, position, coverage, readstarts, readends, uniquecoverage, multitrnacoverage, and per-nucleotide base counts. Gap positions in the alignment are excluded by awk post-processing. |
+| `06_Coverages/pretRNA_locus_coverages.txt` | `get_tRNA_coverage` | Same format as above but for pre-tRNA genomic loci, using locus-specific Sprinzl-equivalent position numbering. Includes trailer coverage (`_trailercounts`) positions downstream of the mature tRNA end. |
 
 ---
 
-### `03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printrealcounts`)
+## Plots
 
-Same biotype breakdown as `smRNA_raw_counts_by_group.txt` but with **raw (un-normalized) counts** for each individual sample rather than replicate groups. Use this file when you want to inspect per-sample variation before normalization.
+Visualization rules run after normalization and coverage are complete. Coverage plots are produced for every tRNA gene.
 
----
-
-### `03_Raw_Quant/other_smRNAs/read_length_distribution.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printlengthfile`)
-
-Tab-delimited read-length distribution broken down by RNA class (tRNA, pre-tRNA, other). Unlike `02_tRNA_alignment/full_alignment_read_length_distribution.txt`, this file shows how the size distribution differs across biotypes.
-
-| Column | Description |
-|--------|-------------|
-| Length | Read length (nt) |
-| Sample | Sample ID |
-| other | Reads not classified as tRNA or pre-tRNA |
-| trnas | Reads classified as mature tRNA |
-| pretrnas | Reads classified as pre-tRNA |
+| Output | Rule | Contents |
+|--------|------|----------|
+| `07_Plots/Grouped_boxplot_norm_unique_tRNAss_by_Sample_and_Anticodon.png` | `plot_counts` | Boxplot of normalized unique tRNA counts, grouped by sample and anticodon. Shows spread of isoacceptor expression within and between conditions. |
+| `07_Plots/Isoacceptor_counts_by_sample_normalized.png` | `plot_counts` | Normalized read counts for each isoacceptor family, one bar per sample. Shows per-sample variation in tRNA pool composition. |
+| `07_Plots/Isoacceptor_counts_normalized.png` | `plot_counts` | Isoacceptor counts summarized across replicate groups. Primary figure for comparing tRNA pool composition between conditions. |
+| `07_Plots/CCA_ends_Relative_Abundances.png` | `plot_counts` | Relative proportions of CCA end types (CCA / CC / C / Trimmed) per sample. A high proportion of `Trimmed` indicates aminoacylation or 3′ end damage. |
+| `07_Plots/CCA_ends_normalized_absolute_abundances.png` | `plot_counts` | Normalized absolute counts of each CCA end type. Use when total tRNA pool size changes between conditions and proportions alone are misleading. |
+| `07_Plots/smRNA_Relative_Abundances.png` | `plot_counts` | Stacked bar chart of RNA biotype contributions (tRNA, miRNA, snoRNA, rRNA, other) per sample. Primary library composition QC figure. |
+| `07_Plots/coverage/{tRNA}_normalized_coverage.png` | `plot_counts` | Per-tRNA Sprinzl-position coverage plot, one PNG per mature tRNA gene, faceted by sample. |
 
 ---
 
-### `03_Raw_Quant/other_smRNAs/subroup_counts.txt`
-**Rule:** `count_smRNAs` → `count_all_smRNA.py` (`printmismatchcounts`)
+## Quality Control
 
-Tab-delimited mismatch count distributions, reporting how many reads in each sample have 0, 1, 2, … up to 9 mismatches, split into tRNA and non-tRNA reads. Used to assess alignment quality and mismatch tolerance. Note: the filename contains a typo (`subroup` instead of `subgroup`) inherited from the original pipeline.
+MultiQC custom content files are generated by `generate_mqc_custom_content.py` before being aggregated into the final HTML report. The report consolidates outputs from every stage of the pipeline into a single interactive document.
 
-| Column | Description |
-|--------|-------------|
-| count | Number of mismatches (0–9) |
-| type | `trna` or `nontrna` |
-| {sample} … | Normalized read count at this mismatch level per sample |
-
----
-
-## 04_Expression/
-
-All files in this directory are produced by `rule normalize_and_PCA` (`clover-seq-DESeq2.R`).
-
-### `04_Expression/gene_level_counts_size_factors.csv`
-Size factors computed by DESeq2 for gene-level counts. One row per sample with the sample ID and its size factor. Size factors are used to normalize raw counts to a common library depth. This file is also consumed by `rule get_tRNA_coverage` and `rule get_mismatches` to normalize coverage values.
-
-### `04_Expression/normalized_gene_level_counts.csv`
-DESeq2 variance-stabilizing-transformed (VST) counts at the gene level. Rows are tRNA genes; columns are samples. These counts are on a log-like scale, suitable for PCA, heatmaps, and other exploratory visualizations but **not** for differential expression (use the raw counts and the `.Rds` object for that).
-
-### `04_Expression/tRNA_isotype_counts_size_factors.csv`
-Size factors computed from the tRNA isotype count matrix. Separate from gene-level size factors because the set of features differs.
-
-### `04_Expression/normalized_tRNA_isotype_counts.csv`
-DESeq2 VST-normalized counts at the tRNA isotype level. Used directly by `rule plot_counts` to generate isoacceptor count visualizations.
-
-### `04_Expression/gene_level_DESeq2_object.Rds`
-Serialized R `DESeqDataSet` object for gene-level analysis. Load in R with `readRDS()` to perform differential expression, extract normalized counts, or re-run statistical tests with different contrasts without re-running the full pipeline.
-
-### `04_Expression/tRNA_isotype_DESeq2_object.Rds`
-Serialized R `DESeqDataSet` object for tRNA isotype-level analysis. Same purpose as above but at isotype resolution.
-
----
-
-## 04_Expression/ & 07_Plots/PCA/ — PCA outputs
-
-All PCA files are produced by `rule normalize_and_PCA`.
-
-### `07_Plots/PCA/gene_level_variance_plot.png`
-Scree plot showing the percentage of variance explained by each principal component at the gene level. Used to determine how many PCs to examine.
-
-### `07_Plots/PCA/gene_level_loadings.csv`
-PCA loading scores for gene-level features. Each row is a tRNA gene; columns are PC loadings. Identify which genes drive sample separation along each axis.
-
-### `07_Plots/PCA/gene_level_PCA.png`
-PCA scatter plot of samples colored by group at the gene level. The primary QC figure for checking batch effects, outliers, and group separation.
-
-### `07_Plots/PCA/tRNA_isotype_variance_plot.png`
-Scree plot at the tRNA isotype level.
-
-### `07_Plots/PCA/tRNA_isotype_loadings.csv`
-PCA loadings at the isotype level.
-
-### `07_Plots/PCA/tRNA_isotype_PCA.png`
-PCA scatter plot at the isotype level.
-
-### `07_Plots/PCA/PCA_Analysis_Summary.png`
-Combined summary figure showing both gene-level and isotype-level PCAs side-by-side for quick comparison.
-
----
-
-## 05_Mismatches/
-
-### `05_Mismatches/mature_tRNA_mismatches.txt`
-**Rule:** `get_mismatches` → `getgenomicmismatches.py` (`transcriptcoverage`)
-
-Tab-delimited per-position mismatch table for all mature tRNAs. Only positions where the mismatch fraction exceeds 5% in at least one sample (or a flanking position does) are reported, keeping file size manageable. Rows are position-sample combinations; the file is long-format.
-
-| Column | Description |
-|--------|-------------|
-| Feature | tRNA name (e.g., `tRNA-Ala-AGC-1-1`) |
-| Sample | Sample ID |
-| position | Position index within the tRNA sequence (0-based, or Sprinzl number if `--stkfile` supplied) |
-| coverage | Normalized read depth at this position |
-| readstarts | Normalized count of reads starting at this position |
-| readends | Normalized count of reads ending at this position |
-| tRNAreadstotal | Total normalized reads for this tRNA in this sample |
-| expreadstotal | Total reads across all samples (used for filtering) |
-| actualbase | Reference nucleotide at this position (T substituted for U) |
-| mismatchedbases | Normalized count of reads with a mismatch at this position |
-| deletedbases | Normalized count of reads with a deletion at this position |
-| adenines | Count of reads with A at this position |
-| thymines | Count of reads with T at this position |
-| cytosines | Count of reads with C at this position |
-| guanines | Count of reads with G at this position |
-| deletions | Count of reads with a deletion gap at this position |
-
-The per-nucleotide columns (adenines–guanines) report the **observed** base in the read, not whether it is a mismatch — use `actualbase` to determine which calls are mismatches.
-
----
-
-### `05_Mismatches/mature_tRNA_mismatches.bed`
-**Rule:** `get_mismatches` → `getgenomicmismatches.py`
-
-BED file marking high-mismatch positions (mismatch fraction > 5% in any sample). Each interval is a single nucleotide. The BED score field contains `mismatch_fraction × 1000` (integer), allowing BED-compatible tools to filter or visualize by mismatch severity.
-
-Format: `chrom  start  end  name  score  strand`
-where `name` is `{tRNA_name}_{position}pos`.
-
----
-
-### `05_Mismatches/heatmaps/`
-**Rule:** `get_mismatches` → `clover-seq-heatmaps.R`
-
-Directory of PNG heatmap images, one per amino acid group (e.g., `Ala_heatmap.png`, `Val_heatmap.png`). Each heatmap shows mismatch frequency as a color gradient across tRNA positions (columns) and samples (rows), making it easy to identify modification sites or damage patterns that are consistent across samples or specific to a condition.
-
----
-
-## 06_Coverages/
-
-### `06_Coverages/mature_tRNA_coverages.txt`
-**Rule:** `get_tRNA_coverage` → `getcoverage.py` + awk filtering
-
-Tab-delimited per-position coverage table for all mature tRNAs, with alignment-gap columns (positions labelled `.gap` in the Sprinzl numbering) removed by the awk post-processing step. Long-format: each row is one position-sample combination.
-
-| Column | Description |
-|--------|-------------|
-| Feature | tRNA name |
-| Sample | Sample ID (or replicate group if `--combinereps` used) |
-| position | Sprinzl position number (canonical tRNA numbering) |
-| coverage | Normalized read depth at this position |
-| readstarts | Normalized count of reads starting here |
-| readends | Normalized count of reads ending here |
-| uniquecoverage | Coverage from reads uniquely mapping to one tRNA |
-| multitrnacoverage | Coverage from reads mapping to multiple tRNAs (same anticodon) |
-| multianticodoncoverage | Coverage from reads mapping across anticodon families |
-| multiaminocoverage | Coverage from reads mapping across amino acid families |
-| tRNAreadstotal | Total reads for this tRNA in this sample |
-| actualbase | Reference nucleotide at this position |
-| mismatchedbases | Normalized mismatch count |
-| deletedbases | Normalized deletion count |
-| adenines | Reads with A at this position |
-| thymines | Reads with T |
-| cytosines | Reads with C |
-| guanines | Reads with G |
-| deletions | Reads with a deletion at this position |
-
-The Sprinzl position system enables comparison across tRNAs of different lengths by mapping equivalent structural positions (e.g., position 34 is always the wobble base of the anticodon).
-
----
-
-## 07_Plots/
-
-All plots are produced by `rule plot_counts` (`clover-seq-plot-counts.R` and `clover-seq-plot-coverages.R`).
-
-### `07_Plots/Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png`
-Boxplot of normalized tRNA isotype counts grouped by both sample and anticodon. Useful for visualizing the spread of isoacceptor expression within and between conditions.
-
-### `07_Plots/Isoacceptor_counts_by_sample_normalized.png`
-Bar or strip chart showing normalized read counts for each isoacceptor family, faceted or colored by sample. Shows sample-level variation in the tRNA pool composition.
-
-### `07_Plots/Isoacceptor_counts_normalized.png`
-Isoacceptor counts averaged or summarized across replicate groups. The primary figure for comparing the tRNA pool composition between conditions.
-
-### `07_Plots/CCA_ends_Relative_Abundances.png`
-Relative proportions of CCA end types (CCA / CC / C / Trimmed) per sample or group. A high proportion of `Trimmed` reads can indicate aminoacylation activity or tRNA 3′ end damage. Derived from `03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt`.
-
-### `07_Plots/CCA_ends_normalized_absolute_abundances.png`
-Absolute (but size-factor-normalized) counts of each CCA end type rather than proportions. Useful when the total tRNA pool size also changes between conditions.
-
-### `07_Plots/smRNA_Relative_Abundances.png`
-Stacked bar chart showing the relative contribution of each RNA biotype (tRNA, miRNA, snoRNA, rRNA, other, etc.) to the total aligned read count per sample. Derived from `03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt`. A primary QC figure for assessing library composition.
-
----
-
-## 08_QC/
-
-### `08_QC/tRNA_multi_QC_report.html`
-**Rule:** `rule all` → MultiQC
-
-Aggregated HTML quality report consolidating:
-- Cutadapt trimming statistics (adapter content, reads passing filter)
-- Bowtie2 alignment rates
-- Picard duplicate metrics
-- SAMtools flagstat and idxstats summaries
-- Count table summaries from `03_Raw_Quant/tRNA_counts/`
-
-Open in any web browser. This is the primary deliverable for QC review and should be inspected before proceeding to differential expression analysis.
-
-> **Note:** The intermediate file `03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt` is removed by this rule after MultiQC finishes.
+| Output | Rule | Contents |
+|--------|------|----------|
+| `08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv` | `generate_mqc_content` | Top-20 tRNA genes by total expression across all samples; formatted as a MultiQC bargraph with % toggle. |
+| `08_QC/mqc_custom_content/cca_tail_status_mqc.tsv` | `generate_mqc_content` | CCA tail completeness summed across all tRNAs per sample; formatted as a MultiQC bargraph. |
+| `08_QC/mqc_custom_content/smrna_biotype_mqc.tsv` | `generate_mqc_content` | Small RNA biotype distribution per sample; formatted as a MultiQC bargraph. |
+| `08_QC/mqc_custom_content/choosemappings_stats_mqc.tsv` | `generate_mqc_content` | Per-sample tRNA alignment assignment statistics parsed from `choosemappings.py` logs. Columns: Total tRNA Reads, Multi-Transcript Reads, Multi-Anticodon Reads, Multi-Amino Reads, Non-tRNA (unique), Non-tRNA (multi-mapped), Imperfect Matches. Displayed as an interactive table in MultiQC. |
+| `08_QC/tRNA_multi_QC_report.html` | `rule all` | Aggregated MultiQC HTML report consolidating cutadapt trimming stats, bowtie2 alignment rates, samtools flagstat/idxstats, tRNA count summaries, and all custom content above. Open in any browser. This is the primary deliverable for QC review and should be inspected before interpreting differential expression results. |
