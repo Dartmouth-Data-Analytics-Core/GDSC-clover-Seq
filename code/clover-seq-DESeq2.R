@@ -32,18 +32,20 @@ suppressMessages(library(SummarizedExperiment))
 
 # Arg 1: sample sheet
 # Arg 2: reference level
-# Arg 3: (optional) comparisons file — two-column tab-delimited,
+# Arg 3: unique_tRNA_counts.txt — per-sample uniquely-mapped tRNA counts
+# Arg 4: (optional) comparisons file — two-column tab-delimited,
 #         each row is one comparison (group1, group2).
 #         If omitted, all pairwise combinations are run.
 
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 2 | length(args) > 3) {
-  stop("Usage: RScript clover-seq-DESeq2.R <Sample_list_SE.txt> <reference level> [comparisons.txt]")
+if (length(args) < 3 | length(args) > 4) {
+  stop("Usage: RScript clover-seq-DESeq2.R <Sample_list_SE.txt> <reference level> <unique_counts>[comparisons.txt]")
 }
 
 metadata <- args[1]
 refLevel <- args[2]
+collapsedCounts <- args[3]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # SET DIRECTORIES
@@ -240,7 +242,7 @@ runDE <- function(dds, normCounts, meta, comparisons, typename, deDir) {
   colnames(logcols)  <- paste("log2", colnames(logcols),  sep = "_")
   colnames(padjcols) <- paste("padj", colnames(padjcols), sep = "_")
   allcombinevals <- as.matrix(cbind(logcols, padjcols, medcountmat))
-  write.csv(allcombinevals, paste0(deDir, typename, "_combine.csv"))
+  write.csv(allcombinevals, paste0(deDir, typename, "_combine.csv"), col.names = NA)
   message(paste0("\tWrote combined table for ", typename))
   message("--------------------------------------------------")
 }
@@ -259,8 +261,11 @@ if (!refLevel %in% uniqueLevels) {
 meta$Group <- factor(meta$Group)
 meta$Group <- relevel(meta$Group, ref = refLevel)
 
-data <- read_file_safe(paste0(trnaDir, "gene_level_counts_collapsed.txt"), sep = "\t", row.names = 1)
-trna <- read_file_safe(paste0(trnaDir, "tRNA_isotype_counts.txt"),         sep = "\t", row.names = 1)
+data <- read_file_safe(collapsedCounts, sep = "\t", row.names = 1)
+trna <- read_file_safe(paste0(trnaDir, "unique_tRNA_counts.txt"),         sep = "\t", row.names = 1)
+
+# For full data, remove lines that are not tRNA or trX
+data <- data[grepl("^(tRNA|tRX)", rownames(data)), ]
 
 check1 <- all(rownames(meta) %in% colnames(data))
 check2 <- all(rownames(meta) %in% colnames(trna))
@@ -273,8 +278,8 @@ if (!check1 | !check2) {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # BUILD COMPARISONS
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-if (length(args) == 3) {
-  pairtable  <- read.table(args[3], stringsAsFactors = FALSE)
+if (length(args) == 4) {
+  pairtable  <- read.table(args[4], stringsAsFactors = FALSE)
   pairreduce <- pairtable[pairtable[, 1] %in% uniqueLevels &
                             pairtable[, 2] %in% uniqueLevels, ]
   comparisons <- apply(pairreduce, 1, list)
@@ -344,8 +349,8 @@ varianceFull <- data.frame(Features = seq_along(fullVars), Variance = fullVars)
 fullVar <- ggplot2::ggplot(varianceFull, aes(x = Features, y = Variance)) +
   geom_point() +
   theme_classic() +
-  labs(title = "tRNA + smRNA Gene Variance Plot",
-       x     = "Number of Features (tRNAs + smRNAs)",
+  labs(title = "tRNA (All) Gene Variance Plot",
+       x     = "Number of Features (tRNAs)",
        y     = "Variance") +
   theme(plot.title = element_text(size = 16, face = "bold"),
         axis.title = element_text(size = 14, face = "bold"),
@@ -353,7 +358,7 @@ fullVar <- ggplot2::ggplot(varianceFull, aes(x = Features, y = Variance)) +
 ggplot2::ggsave(fullVar, filename = paste0(pcaDir, "gene_level_variance_plot.png"), width = 6, height = 6)
 message("\tPlotted gene_level_variance_plot.png\n")
 
-PCsFull      <- generatePCs(ddsFullRlogMat, fullVars, 500)
+PCsFull      <- generatePCs(ddsFullRlogMat, fullVars, nrow(varianceFull))
 loadingsFull <- PCsFull[[1]]
 loadingsFull$Sample <- rownames(loadingsFull)
 loadingsFull <- loadingsFull[match(rownames(meta), rownames(loadingsFull)), ]
@@ -365,7 +370,7 @@ message(paste0("\tPCA loadings saved to ", pcaDir, "gene_level_loadings.csv"))
 PCAplotFull <- ggplot2::ggplot(loadingsFull, aes(x = PC1, y = PC2, color = Group, label = Sample)) +
   geom_point(size = 5) +
   geom_text_repel() +
-  labs(title = "tRNA + smRNA PCA",
+  labs(title = "tRNA PCA",
        x     = paste0("PC1: ", PCsFull[[3]][1]),
        y     = paste0("PC2: ", PCsFull[[3]][2])) +
   theme_classic(base_size = 16) +
@@ -400,24 +405,24 @@ trna_normalizedCounts <- sweep(trna, 2, sizeFactors(ddstrna), "/")
 #----- Write size factors (two-row: sample names, then values)
 write.table(
   rbind(rownames(meta), sizeFactors(ddstrna)),
-  file      = paste0(normalizedDir, "tRNA_isotype_counts_size_factors.csv"),
+  file      = paste0(normalizedDir, "unique_tRNAs_counts_size_factors.csv"),
   row.names = FALSE,
   col.names = FALSE
 )
-message(paste0("\tSize factors saved to ", normalizedDir, "tRNA_isotype_counts_size_factors.csv"))
+message(paste0("\tSize factors saved to ", normalizedDir, "unique_tRNAs_counts_size_factors.csv"))
 
 #----- Write normalized counts
-write.csv(trna_normalizedCounts, file = paste0(normalizedDir, "normalized_tRNA_isotype_counts.csv"))
-message(paste0("\tNormalized counts saved to ", normalizedDir, "normalized_tRNA_isotype_counts.csv"))
+write.csv(trna_normalizedCounts, file = paste0(normalizedDir, "normalized_unique_tRNAs_counts.csv"))
+message(paste0("\tNormalized counts saved to ", normalizedDir, "normalized_unique_tRNAs_counts.csv"))
 
 #----- Run DESeq2 (tRAX-style: betaPrior=TRUE)
 ddstrna <- DESeq2::DESeq(ddstrna, betaPrior = TRUE)
 
-saveRDS(ddstrna, file = paste0(rdsDir, "tRNA_isotype_DESeq2_object.Rds"))
-message(paste0("\n\tSaved RDS to ", rdsDir, "tRNA_isotype_DESeq2_object.Rds"))
+saveRDS(ddstrna, file = paste0(rdsDir, "unique_tRNAs_DESeq2_object.Rds"))
+message(paste0("\n\tSaved RDS to ", rdsDir, "unique_tRNAs_DESeq2_object.Rds"))
 
 #----- Differential expression
-runDE(ddstrna, trna_normalizedCounts, meta, comparisons, "tRNA_isotype", deDir)
+runDE(ddstrna, trna_normalizedCounts, meta, comparisons, "unique_tRNAs", deDir)
 
 #----- rlog for PCA
 ddstrnaRlog    <- DESeq2::rlog(ddstrna)
@@ -437,8 +442,8 @@ trnaVar <- ggplot2::ggplot(variancetrna, aes(x = Features, y = Variance)) +
   theme(plot.title = element_text(size = 16, face = "bold"),
         axis.title = element_text(size = 14, face = "bold"),
         axis.text  = element_text(size = 12))
-ggplot2::ggsave(trnaVar, filename = paste0(pcaDir, "tRNA_isotype_variance_plot.png"), width = 6, height = 6)
-message("\tPlotted tRNA_isotype_variance_plot.png\n")
+ggplot2::ggsave(trnaVar, filename = paste0(pcaDir, "unique_tRNAs_variance_plot.png"), width = 6, height = 6)
+message("\tPlotted unique_tRNAs_variance_plot.png\n")
 
 message(paste0("Length Variance tRNA ", length(variancetrna)))
 
@@ -448,8 +453,8 @@ loadingstrna$Sample <- rownames(loadingstrna)
 loadingstrna <- loadingstrna[match(rownames(meta), rownames(loadingstrna)), ]
 loadingstrna$Group <- meta$Group
 
-write.csv(loadingstrna, file = paste0(pcaDir, "tRNA_isotype_loadings.csv"))
-message(paste0("PCA loadings saved to ", pcaDir, "tRNA_isotype_loadings.csv"))
+write.csv(loadingstrna, file = paste0(pcaDir, "unique_tRNAs_loadings.csv"))
+message(paste0("PCA loadings saved to ", pcaDir, "unique_tRNAs_loadings.csv"))
 
 PCAplottrna <- ggplot2::ggplot(loadingstrna, aes(x = PC1, y = PC2, color = Group, label = Sample)) +
   geom_point(size = 5) +
@@ -464,8 +469,8 @@ PCAplottrna <- ggplot2::ggplot(loadingstrna, aes(x = PC1, y = PC2, color = Group
         panel.background = element_rect(fill = "white", color = NA),
         plot.background  = element_rect(fill = "white", color = NA),
         title            = element_text(face = "bold"))
-ggplot2::ggsave(PCAplottrna, file = paste0(pcaDir, "tRNA_isotype_PCA.png"), width = 6, height = 6)
-message("\tPlotted tRNA_isotype_PCA.png")
+ggplot2::ggsave(PCAplottrna, file = paste0(pcaDir, "unique_tRNAs_PCA.png"), width = 6, height = 6)
+message("\tPlotted unique_tRNAs_PCA.png")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # COMBINED PCA PLOT

@@ -96,7 +96,7 @@ rule all:
         #----- Rule tRNA_count outputs
         expand("03_Raw_Quant/tRNA_counts/{file}", file=[
             "genetype_counts.txt",
-            "tRNA_isotype_counts.txt",
+            "unique_tRNAs_counts.txt",
             "gene_level_counts_detailed.txt",
             "gene_level_counts_collapsed.txt",
             "tRNA_ends_counts.txt",
@@ -120,17 +120,17 @@ rule all:
         expand("04_Expression/{file}", file=[
             "gene_level_counts_size_factors.csv",
             "normalized_gene_level_counts.csv",
-            "tRNA_isotype_counts_size_factors.csv",
-            "normalized_tRNA_isotype_counts.csv",
+            "unique_tRNAs_counts_size_factors.csv",
+            "normalized_unique_tRNAs_counts.csv",
             "gene_level_DESeq2_object.Rds",
-            "tRNA_isotype_DESeq2_object.Rds"]),
+            "unique_tRNAs_DESeq2_object.Rds"]),
         expand("07_Plots/PCA/{file}", file=[
             "gene_level_variance_plot.png",
             "gene_level_loadings.csv",
             "gene_level_PCA.png",
-            "tRNA_isotype_variance_plot.png",
-            "tRNA_isotype_loadings.csv",
-            "tRNA_isotype_PCA.png",
+            "unique_tRNAs_variance_plot.png",
+            "unique_tRNAs_loadings.csv",
+            "unique_tRNAs_PCA.png",
             "PCA_Analysis_Summary.png"]),
 
         #----- Rule get_tRNA_coverage outputs
@@ -139,7 +139,7 @@ rule all:
 
         #----- Rule plot_counts outputs
         expand("07_Plots/{file}", file=[
-            "Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png",
+            "Grouped_boxplot_norm_unique_tRNAss_by_Sample_and_Anticodon.png",
             "Isoacceptor_counts_by_sample_normalized.png",
             "Isoacceptor_counts_normalized.png",
             "CCA_ends_Relative_Abundances.png",
@@ -147,7 +147,7 @@ rule all:
             "smRNA_Relative_Abundances.png"]),
 
         #----- Rule generate_mqc_content outputs
-        "08_QC/mqc_custom_content/trna_isotype_abundance_mqc.tsv",
+        "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
         "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
         "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv",
 
@@ -172,11 +172,6 @@ rule all:
             08_QC/mqc_custom_content \
             -n 08_QC/tRNA_multi_QC_report.html \
             -c multiqc_config.yaml
-
-        #----- Clean redundant file
-        if [ -f 03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt ]; then
-            rm 03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt
-        fi
 
     """
 
@@ -204,7 +199,7 @@ rule trimming:
             -j {resources.cpus} > {log} 
     """
 
-#----- Rule 1: align with bowtie2, write name-ordered raw BAM
+#----- Rule 1: align with bowtie2, write name-ordered raw BAM. 
 rule tRNA_bowtie2:
     input:
         trim_1 = "01_trimming/{sample}.R1.trim.fastq.gz"
@@ -235,7 +230,9 @@ rule tRNA_bowtie2:
 
     """
 
-#----- Rule 2: select best tRNA mappings, coordinate-sort, index
+#----- Rule 2: select best tRNA mappings, coordinate-sort, index.
+# This script was modified to accept pre-saved BAM files instead of 
+# pipe them directly to the script. The log file can be used for multiqc stuff.
 rule tRNA_choosemappings:
     input:
         rawBam = "02_tRNA_alignment/{sample}.raw.bam"
@@ -280,13 +277,14 @@ rule tRNA_map_stats:
 
     """
 
-#----- Rule to count tRNAs
+#----- Rule to count tRNAs with nofrag behavior toggled on. 
+# This removes the 5', 3'-fragment, antisense breakdown
 rule tRNA_count:
     input:
         expand("02_tRNA_alignment/{sample}.srt.bam", sample=sample_list)
     output:
         genetypeFile        = "03_Raw_Quant/tRNA_counts/genetype_counts.txt",
-        tRNA_isotype_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
+        unique_tRNAs_counts = "03_Raw_Quant/tRNA_counts/unique_tRNAs_counts.txt",
         trnaCountsDetailed  = "03_Raw_Quant/tRNA_counts/gene_level_counts_detailed.txt",
         trnaCountsCollapsed = "03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt",
         trnaEnds            = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
@@ -300,7 +298,8 @@ rule tRNA_count:
         trna_db     = config["trna_db"]
     shell: """
 
-        #----- Run the countreads.py script
+        #----- Run the countreads.py script in nofrag mode (i.e., focus on tRNAs, don't 
+        # split into 3' 5' antisense fragments, which is more of a tDR analysis)
         python {params.countScript} \
             --samplefile={params.runFile} \
             --ensemblgtf={params.trna_db}/genes.gtf \
@@ -308,10 +307,11 @@ rule tRNA_count:
             --maturetrnas={params.trna_db}/db-maturetRNAs.bed \
             --trnatable={params.trna_db}/db-trnatable.txt \
             --removepseudo \
+            --nofrag \
             --genetypefile={output.genetypeFile} \
             --countfile={output.trnaCountsDetailed} \
             --trnaends={output.trnaEnds} \
-            --trnacounts={output.tRNA_isotype_counts} \
+            --trnacounts={output.unique_tRNAs_counts} \
             --trnauniquecounts={output.trnaUniqueCounts} \
             --cores={resources.cpus}
 
@@ -386,24 +386,25 @@ rule count_smRNAs:
     """
 
 #----- Rule to normalize counts and generate PCA
+# Runs DE on all the tRNAs (uniq+multimappers) as well as unique only
 rule normalize_and_PCA:
     input:
         geneLevelCounts = "03_Raw_Quant/tRNA_counts/gene_level_counts_collapsed.txt",
-        isoformCounts   = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt"
+        trnaUniqueCounts = "03_Raw_Quant/tRNA_counts/unique_tRNA_counts.txt"
     output:
         "04_Expression/gene_level_counts_size_factors.csv",
         "04_Expression/normalized_gene_level_counts.csv",
         "07_Plots/PCA/gene_level_variance_plot.png",
         "07_Plots/PCA/gene_level_loadings.csv",
         "07_Plots/PCA/gene_level_PCA.png",
-        "04_Expression/tRNA_isotype_counts_size_factors.csv",
-        "04_Expression/normalized_tRNA_isotype_counts.csv",
-        "07_Plots/PCA/tRNA_isotype_variance_plot.png",
-        "07_Plots/PCA/tRNA_isotype_loadings.csv",
-        "07_Plots/PCA/tRNA_isotype_PCA.png",
+        "04_Expression/unique_tRNAs_counts_size_factors.csv",
+        "04_Expression/normalized_unique_tRNAs_counts.csv",
+        "07_Plots/PCA/unique_tRNAs_variance_plot.png",
+        "07_Plots/PCA/unique_tRNAs_loadings.csv",
+        "07_Plots/PCA/unique_tRNAs_PCA.png",
         "07_Plots/PCA/PCA_Analysis_Summary.png",
         "04_Expression/gene_level_DESeq2_object.Rds",
-        "04_Expression/tRNA_isotype_DESeq2_object.Rds"
+        "04_Expression/unique_tRNAs_DESeq2_object.Rds"
     message: "Normalizing counts and generating PCA"
     conda: "env_config/clover-seq.yaml"
     resources: cpus="12", maxtime="6:00:00", mem_mb="60gb"
@@ -417,7 +418,8 @@ rule normalize_and_PCA:
         #----- Run normalization and PCA script
         Rscript {params.DESeqScript} \
             {params.metadata} \
-            {params.refLevel}
+            {params.refLevel} \
+            {input.geneLevelCounts}
     """
 
 #----- Rule to get tRNA coverages (mature + pre-tRNA locus), matching processsamples.py gettrnacoverage
@@ -496,10 +498,10 @@ rule get_mismatches:
 #----- Rule to generate count plots
 rule plot_counts:
     input:
-        "04_Expression/normalized_tRNA_isotype_counts.csv",
+        "04_Expression/normalized_unique_tRNAs_counts.csv",
         "06_Coverages/mature_tRNA_coverages.txt"
     output:
-        "07_Plots/Grouped_boxplot_norm_tRNA_isotypes_by_Sample_and_Anticodon.png",
+        "07_Plots/Grouped_boxplot_norm_unique_tRNAss_by_Sample_and_Anticodon.png",
         "07_Plots/Isoacceptor_counts_by_sample_normalized.png",
         "07_Plots/Isoacceptor_counts_normalized.png",
         "07_Plots/CCA_ends_Relative_Abundances.png",
@@ -528,11 +530,11 @@ rule plot_counts:
 #----- Rule to generate MultiQC custom content files
 rule generate_mqc_content:
     input:
-        gene_level_counts = "03_Raw_Quant/tRNA_counts/tRNA_isotype_counts.txt",
+        gene_level_counts = "03_Raw_Quant/tRNA_counts/unique_tRNAs_counts.txt",
         ends_counts       = "03_Raw_Quant/tRNA_counts/tRNA_ends_counts.txt",
         biotype_counts    = "03_Raw_Quant/other_smRNAs/smRNA_raw_counts_by_sample.txt"
     output:
-        isotype = "08_QC/mqc_custom_content/trna_isotype_abundance_mqc.tsv",
+        isotype = "08_QC/mqc_custom_content/unique_tRNAs_abundance_mqc.tsv",
         cca     = "08_QC/mqc_custom_content/cca_tail_status_mqc.tsv",
         biotype = "08_QC/mqc_custom_content/smrna_biotype_mqc.tsv"
     message: "Generating MultiQC custom content"
